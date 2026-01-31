@@ -127,51 +127,51 @@ export default function CameraScreen() {
         ref={cameraRef}
         style={styles.camera}
         facing={facing}
-      >
-        {/* Face Overlay Guide */}
-        <View style={styles.overlayContainer}>
-          <Svg height={height * 0.7} width={width}>
-            {/* Face oval guide */}
-            <Ellipse
-              cx={width / 2}
-              cy={height * 0.35}
-              rx={width * 0.35}
-              ry={height * 0.28}
-              stroke="#00CEC9"
-              strokeWidth="3"
-              fill="none"
-              opacity={0.8}
-            />
-            
-            {/* Center guide line */}
-            <Line
-              x1={width / 2}
-              y1={height * 0.15}
-              x2={width / 2}
-              y2={height * 0.55}
-              stroke="#00CEC9"
-              strokeWidth="2"
-              strokeDasharray="10,10"
-              opacity={0.6}
-            />
+      />
+      
+      {/* Face Overlay Guide - Outside CameraView */}
+      <View style={styles.overlayContainer} pointerEvents="none">
+        <Svg height={height * 0.7} width={width}>
+          {/* Face oval guide */}
+          <Ellipse
+            cx={width / 2}
+            cy={height * 0.35}
+            rx={width * 0.35}
+            ry={height * 0.28}
+            stroke="#00CEC9"
+            strokeWidth="3"
+            fill="none"
+            opacity={0.8}
+          />
+          
+          {/* Center guide line */}
+          <Line
+            x1={width / 2}
+            y1={height * 0.15}
+            x2={width / 2}
+            y2={height * 0.55}
+            stroke="#00CEC9"
+            strokeWidth="2"
+            strokeDasharray="10,10"
+            opacity={0.6}
+          />
 
-            {/* Instruction text */}
-            <SvgText
-              x={width / 2}
-              y={height * 0.12}
-              fontSize="16"
-              fontWeight="bold"
-              fill="#FFFFFF"
-              textAnchor="middle"
-              stroke="#000000"
-              strokeWidth="4"
-              paintOrder="stroke"
-            >
-              Align your face within the oval
-            </SvgText>
-          </Svg>
-        </View>
-      </CameraView>
+          {/* Instruction text */}
+          <SvgText
+            x={width / 2}
+            y={height * 0.12}
+            fontSize="16"
+            fontWeight="bold"
+            fill="#FFFFFF"
+            textAnchor="middle"
+            stroke="#000000"
+            strokeWidth="4"
+            paintOrder="stroke"
+          >
+            Align your face within the oval
+          </SvgText>
+        </Svg>
+      </View>
 
       {/* Instructions */}
       <View style={styles.instructionsContainer}>
