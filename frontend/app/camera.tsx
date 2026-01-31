@@ -14,6 +14,7 @@ export default function CameraScreen() {
   const [permission, requestPermission] = useCameraPermissions();
   const [facing, setFacing] = useState<'front' | 'back'>('front');
   const [isCapturing, setIsCapturing] = useState(false);
+  const [isCameraReady, setIsCameraReady] = useState(false);
   const cameraRef = useRef<any>(null);
 
   useEffect(() => {
