@@ -131,6 +131,10 @@ export default function CameraScreen() {
         ref={cameraRef}
         style={styles.camera}
         facing={facing}
+        onCameraReady={() => {
+          console.log('Camera ready!');
+          setIsCameraReady(true);
+        }}
       />
       
       {/* Face Overlay Guide - Outside CameraView */}
