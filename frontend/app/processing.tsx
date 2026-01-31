@@ -39,11 +39,15 @@ export default function ProcessingScreen() {
       // Retrieve temp image data
       const tempData = await AsyncStorage.getItem('temp_scan_image');
       if (!tempData) {
+        console.error('No temp image data found');
         throw new Error('No image data found');
       }
 
+      console.log('Retrieved temp data, parsing...');
       const { uri, base64, analysisType, timestamp } = JSON.parse(tempData);
       console.log('Processing image for:', analysisType);
+      console.log('Image URI:', uri);
+      console.log('Has base64:', !!base64);
 
       // Step 1: Preparing image
       setCurrentStep(0);
