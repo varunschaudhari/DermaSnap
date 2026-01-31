@@ -1,19 +1,26 @@
 {
   "expo": {
-    "name": "frontend",
-    "slug": "frontend",
+    "name": "DermaSnap",
+    "slug": "dermasnap",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
-    "scheme": "frontend",
+    "scheme": "dermasnap",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
+    "splash": {
+      "image": "./assets/images/splash-icon.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#ffffff"
+    },
     "ios": {
       "supportsTablet": true,
       "infoPlist": {
         "NSCameraUsageDescription": "Capture selfies to analyze skin",
-        "NSPhotoLibraryUsageDescription": "Save skin analysis results"
-      }
+        "NSPhotoLibraryUsageDescription": "Save skin analysis results",
+        "NSPhotoLibraryAddUsageDescription": "Save analysis photos to your gallery"
+      },
+      "bundleIdentifier": "com.dermasnap.app"
     },
     "android": {
       "adaptiveIcon": {
@@ -24,8 +31,13 @@
       "permissions": [
         "CAMERA",
         "READ_EXTERNAL_STORAGE",
-        "WRITE_EXTERNAL_STORAGE"
-      ]
+        "WRITE_EXTERNAL_STORAGE",
+        "READ_MEDIA_IMAGES",
+        "ACCESS_MEDIA_LOCATION",
+        "RECEIVE_BOOT_COMPLETED",
+        "SCHEDULE_EXACT_ALARM"
+      ],
+      "package": "com.dermasnap.app"
     },
     "web": {
       "bundler": "metro",
@@ -38,6 +50,22 @@
         "expo-camera",
         {
           "cameraPermission": "Capture selfies to analyze skin"
+        }
+      ],
+      [
+        "expo-media-library",
+        {
+          "photosPermission": "Save analysis photos to your gallery",
+          "savePhotosPermission": "Save analysis results",
+          "isAccessMediaLocationEnabled": true
+        }
+      ],
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/images/notification-icon.png",
+          "color": "#00B894",
+          "sounds": []
         }
       ],
       [
