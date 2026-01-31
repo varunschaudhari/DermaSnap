@@ -1,9 +1,10 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Dimensions, Alert, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Dimensions, Alert, ActivityIndicator, StatusBar } from 'react-native';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import Svg, { Circle, Ellipse, Line, Text as SvgText } from 'react-native-svg';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const { width, height } = Dimensions.get('window');
 
@@ -24,7 +25,7 @@ export default function CameraScreen() {
   if (!permission) {
     return (
       <View style={styles.container}>
-        <ActivityIndicator size="large" color="#4A90E2" />
+        <ActivityIndicator size="large" color="#00B894" />
       </View>
     );
   }
@@ -32,10 +33,12 @@ export default function CameraScreen() {
   if (!permission.granted) {
     return (
       <View style={styles.permissionContainer}>
-        <Ionicons name="camera-off" size={64} color="#95A5A6" />
+        <View style={styles.permissionIconContainer}>
+          <Ionicons name="camera-off-outline" size={64} color="#00B894" />
+        </View>
         <Text style={styles.permissionTitle}>Camera Access Required</Text>
         <Text style={styles.permissionText}>
-          SkinQuant AI needs access to your camera to capture and analyze your skin.
+          SkinQuant AI needs camera access to capture and analyze your skin condition.
         </Text>
         <TouchableOpacity style={styles.permissionButton} onPress={requestPermission}>
           <Text style={styles.permissionButtonText}>Grant Camera Access</Text>
@@ -52,24 +55,31 @@ export default function CameraScreen() {
 
     try {
       setIsCapturing(true);
+      console.log('Taking picture...');
+      
       const photo = await cameraRef.current.takePictureAsync({
-        quality: 1,
+        quality: 0.8,
         base64: true,
       });
 
+      console.log('Picture taken, URI:', photo.uri);
+
+      // Store image data temporarily in AsyncStorage to avoid URL param size limits
+      await AsyncStorage.setItem('temp_scan_image', JSON.stringify({
+        uri: photo.uri,
+        base64: photo.base64,
+        analysisType: type,
+        timestamp: new Date().toISOString(),
+      }));
+
+      console.log('Navigating to processing...');
+      
       // Navigate to processing screen
-      router.push({
-        pathname: '/processing',
-        params: {
-          imageUri: photo.uri,
-          imageBase64: photo.base64,
-          analysisType: type,
-        },
-      });
+      router.push('/processing');
+      
     } catch (error) {
       console.error('Error taking picture:', error);
       Alert.alert('Error', 'Failed to capture image. Please try again.');
-    } finally {
       setIsCapturing(false);
     }
   };
@@ -95,14 +105,20 @@ export default function CameraScreen() {
 
   return (
     <View style={styles.container}>
+      <StatusBar barStyle="light-content" />
+      
       {/* Header */}
       <View style={styles.header}>
         <TouchableOpacity style={styles.headerButton} onPress={() => router.back()}>
-          <Ionicons name="arrow-back" size={24} color="#FFFFFF" />
+          <View style={styles.headerButtonCircle}>
+            <Ionicons name="arrow-back" size={24} color="#00B894" />
+          </View>
         </TouchableOpacity>
         <Text style={styles.headerTitle}>{getAnalysisTitle()}</Text>
         <TouchableOpacity style={styles.headerButton} onPress={toggleCameraFacing}>
-          <Ionicons name="camera-reverse" size={24} color="#FFFFFF" />
+          <View style={styles.headerButtonCircle}>
+            <Ionicons name="camera-reverse" size={24} color="#00B894" />
+          </View>
         </TouchableOpacity>
       </View>
 
@@ -121,10 +137,10 @@ export default function CameraScreen() {
               cy={height * 0.35}
               rx={width * 0.35}
               ry={height * 0.28}
-              stroke="#4A90E2"
+              stroke="#00CEC9"
               strokeWidth="3"
               fill="none"
-              opacity={0.7}
+              opacity={0.8}
             />
             
             {/* Center guide line */}
@@ -133,10 +149,10 @@ export default function CameraScreen() {
               y1={height * 0.15}
               x2={width / 2}
               y2={height * 0.55}
-              stroke="#4A90E2"
+              stroke="#00CEC9"
               strokeWidth="2"
               strokeDasharray="10,10"
-              opacity={0.5}
+              opacity={0.6}
             />
 
             {/* Instruction text */}
@@ -148,7 +164,7 @@ export default function CameraScreen() {
               fill="#FFFFFF"
               textAnchor="middle"
               stroke="#000000"
-              strokeWidth="3"
+              strokeWidth="4"
               paintOrder="stroke"
             >
               Align your face within the oval
@@ -159,14 +175,24 @@ export default function CameraScreen() {
 
       {/* Instructions */}
       <View style={styles.instructionsContainer}>
-        <View style={styles.instructionCard}>
-          <Ionicons name="information-circle" size={20} color="#4A90E2" />
-          <Text style={styles.instructionText}>Position Tips:</Text>
+        <View style={styles.instructionHeader}>
+          <Ionicons name="bulb" size={20} color="#00B894" />
+          <Text style={styles.instructionTitle}>Capture Tips</Text>
         </View>
-        <Text style={styles.instructionDetail}>• Keep face centered in the oval</Text>
-        <Text style={styles.instructionDetail}>• Ensure good lighting (avoid shadows)</Text>
-        <Text style={styles.instructionDetail}>• Maintain neutral expression</Text>
-        <Text style={styles.instructionDetail}>• Keep phone at arm's length</Text>
+        <View style={styles.instructionsList}>
+          <View style={styles.instructionItem}>
+            <View style={styles.instructionDot} />
+            <Text style={styles.instructionText}>Center your face in the oval</Text>
+          </View>
+          <View style={styles.instructionItem}>
+            <View style={styles.instructionDot} />
+            <Text style={styles.instructionText}>Ensure good lighting</Text>
+          </View>
+          <View style={styles.instructionItem}>
+            <View style={styles.instructionDot} />
+            <Text style={styles.instructionText}>Keep neutral expression</Text>
+          </View>
+        </View>
       </View>
 
       {/* Controls */}
@@ -175,13 +201,19 @@ export default function CameraScreen() {
           style={styles.captureButton}
           onPress={takePicture}
           disabled={isCapturing}
+          activeOpacity={0.8}
         >
           {isCapturing ? (
-            <ActivityIndicator size="large" color="#FFFFFF" />
+            <ActivityIndicator size="large" color="#00B894" />
           ) : (
-            <View style={styles.captureButtonInner} />
+            <View style={styles.captureButtonInner}>
+              <Ionicons name="camera" size={32} color="#FFFFFF" />
+            </View>
           )}
         </TouchableOpacity>
+        {isCapturing && (
+          <Text style={styles.capturingText}>Capturing...</Text>
+        )}
       </View>
     </View>
   );
@@ -194,44 +226,53 @@ const styles = StyleSheet.create({
   },
   permissionContainer: {
     flex: 1,
-    backgroundColor: '#F8F9FA',
+    backgroundColor: '#F7FFFE',
     alignItems: 'center',
     justifyContent: 'center',
     padding: 32,
   },
+  permissionIconContainer: {
+    width: 120,
+    height: 120,
+    borderRadius: 60,
+    backgroundColor: '#E8F8F5',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 24,
+  },
   permissionTitle: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    color: '#2C3E50',
-    marginTop: 24,
+    fontSize: 26,
+    fontWeight: '700',
+    color: '#2D3436',
     marginBottom: 12,
     textAlign: 'center',
   },
   permissionText: {
     fontSize: 16,
-    color: '#7F8C8D',
+    color: '#636E72',
     textAlign: 'center',
     lineHeight: 24,
     marginBottom: 32,
+    fontWeight: '400',
   },
   permissionButton: {
-    backgroundColor: '#4A90E2',
+    backgroundColor: '#00B894',
     paddingHorizontal: 32,
     paddingVertical: 16,
-    borderRadius: 12,
+    borderRadius: 16,
     marginBottom: 16,
   },
   permissionButtonText: {
     color: '#FFFFFF',
     fontSize: 16,
-    fontWeight: 'bold',
+    fontWeight: '700',
   },
   backButton: {
     paddingHorizontal: 32,
     paddingVertical: 12,
   },
   backButtonText: {
-    color: '#4A90E2',
+    color: '#00B894',
     fontSize: 16,
     fontWeight: '600',
   },
@@ -241,8 +282,8 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingTop: 50,
     paddingBottom: 16,
-    paddingHorizontal: 16,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    paddingHorizontal: 20,
+    backgroundColor: 'rgba(0, 0, 0, 0.6)',
     position: 'absolute',
     top: 0,
     left: 0,
@@ -255,9 +296,17 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
+  headerButtonCircle: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: 'rgba(255, 255, 255, 0.95)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   headerTitle: {
     fontSize: 18,
-    fontWeight: 'bold',
+    fontWeight: '700',
     color: '#FFFFFF',
   },
   camera: {
@@ -270,33 +319,46 @@ const styles = StyleSheet.create({
   },
   instructionsContainer: {
     position: 'absolute',
-    bottom: 160,
-    left: 16,
-    right: 16,
-    backgroundColor: 'rgba(0, 0, 0, 0.7)',
-    borderRadius: 12,
-    padding: 16,
+    bottom: 180,
+    left: 20,
+    right: 20,
+    backgroundColor: 'rgba(255, 255, 255, 0.95)',
+    borderRadius: 16,
+    padding: 20,
   },
-  instructionCard: {
+  instructionHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
-    marginBottom: 8,
+    marginBottom: 12,
+  },
+  instructionTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#2D3436',
+  },
+  instructionsList: {
+    gap: 8,
+  },
+  instructionItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  instructionDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: '#00B894',
   },
   instructionText: {
     fontSize: 14,
-    fontWeight: 'bold',
-    color: '#FFFFFF',
-  },
-  instructionDetail: {
-    fontSize: 12,
-    color: '#FFFFFF',
-    opacity: 0.9,
-    marginBottom: 4,
+    color: '#636E72',
+    fontWeight: '500',
   },
   controls: {
     position: 'absolute',
-    bottom: 40,
+    bottom: 50,
     left: 0,
     right: 0,
     alignItems: 'center',
@@ -305,16 +367,24 @@ const styles = StyleSheet.create({
     width: 80,
     height: 80,
     borderRadius: 40,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: 'rgba(255, 255, 255, 0.95)',
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 4,
-    borderColor: '#4A90E2',
+    borderColor: '#00B894',
   },
   captureButtonInner: {
     width: 64,
     height: 64,
     borderRadius: 32,
-    backgroundColor: '#4A90E2',
+    backgroundColor: '#00B894',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  capturingText: {
+    color: '#FFFFFF',
+    fontSize: 14,
+    fontWeight: '600',
+    marginTop: 12,
   },
 });
