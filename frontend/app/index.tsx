@@ -244,6 +244,16 @@ export default function HomeScreen() {
           <Text style={styles.historyButtonText}>View Scan History</Text>
         </TouchableOpacity>
 
+        {/* Treatments Button */}
+        <TouchableOpacity
+          style={styles.treatmentsButton}
+          onPress={() => router.push('/treatments')}
+          activeOpacity={0.8}
+        >
+          <Ionicons name="medical-outline" size={22} color="#00CEC9" />
+          <Text style={styles.treatmentsButtonText}>Track Treatments</Text>
+        </TouchableOpacity>
+
         <View style={{ height: 40 }} />
       </ScrollView>
     </View>
