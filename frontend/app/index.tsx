@@ -432,6 +432,23 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: '#00B894',
   },
+  treatmentsButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 10,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    padding: 18,
+    marginTop: 12,
+    borderWidth: 1.5,
+    borderColor: '#00CEC9',
+  },
+  treatmentsButtonText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#00CEC9',
+  },
   modalOverlay: {
     flex: 1,
     backgroundColor: 'rgba(0, 0, 0, 0.8)',
