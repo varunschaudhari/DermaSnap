@@ -131,17 +131,12 @@ export default function ProcessingScreen() {
 
       // Clean up temp data
       await AsyncStorage.removeItem('temp_scan_image');
+      
+      // Store as latest scan result for results screen
+      await AsyncStorage.setItem('latest_scan_result', JSON.stringify(results));
 
       // Navigate to results
-      router.replace({
-        pathname: '/results',
-        params: {
-          resultsId: Date.now().toString(), // Use timestamp as simple ID
-        },
-      });
-
-      // Store results for retrieval
-      await AsyncStorage.setItem(`scan_${Date.now()}`, JSON.stringify(results));
+      router.replace('/results');
 
     } catch (error) {
       console.error('Error processing image:', error);
