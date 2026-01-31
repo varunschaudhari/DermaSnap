@@ -52,7 +52,10 @@ export default function CameraScreen() {
   }
 
   const takePicture = async () => {
-    if (!cameraRef.current || isCapturing) return;
+    if (!cameraRef.current || isCapturing || !isCameraReady) {
+      console.log('Camera not ready or already capturing');
+      return;
+    }
 
     try {
       setIsCapturing(true);
