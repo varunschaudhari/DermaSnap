@@ -176,42 +176,48 @@ export default function ProcessingScreen() {
     try {
       const BACKEND_URL = process.env.EXPO_PUBLIC_BACKEND_URL;
       
+      // Get active profile
+      const profileData = await AsyncStorage.getItem('active_profile');
+      const profile = profileData ? JSON.parse(profileData) : null;
+      
       // Save full data to backend (with base64)
       const response = await fetch(`${BACKEND_URL}/api/scans`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify(results),
+        body: JSON.stringify({
+          ...results,
+          profileId: profile?.id,
+        }),
       });
 
       if (!response.ok) {
         console.error('Failed to save to backend');
       }
 
-      // Save to AsyncStorage WITHOUT base64 to save space
-      const AsyncStorage = (await import('@react-native-async-storage/async-storage')).default;
-      
-      // Create lightweight version (no base64)
-      const lightweightResult = {
-        imageUri: results.imageUri,
-        // Don't store imageBase64 - too large!
-        skinTone: results.skinTone,
-        timestamp: results.timestamp,
-        analysisType: results.analysisType,
-        acne: results.acne,
-        pigmentation: results.pigmentation,
-        wrinkles: results.wrinkles,
-      };
-      
-      const existingScans = await AsyncStorage.getItem('skin_scans');
-      const scans = existingScans ? JSON.parse(existingScans) : [];
-      scans.unshift(lightweightResult);
-      
-      // Keep only last 20 scans to prevent storage overflow
-      if (scans.length > 20) scans.length = 20;
-      
-      await AsyncStorage.setItem('skin_scans', JSON.stringify(scans));
+      if (profile) {
+        // Save to profile-specific AsyncStorage WITHOUT base64
+        const lightweightResult = {
+          imageUri: results.imageUri,
+          skinTone: results.skinTone,
+          timestamp: results.timestamp,
+          analysisType: results.analysisType,
+          acne: results.acne,
+          pigmentation: results.pigmentation,
+          wrinkles: results.wrinkles,
+        };
+        
+        const storageKey = `skin_scans_${profile.id}`;
+        const existingScans = await AsyncStorage.getItem(storageKey);
+        const scans = existingScans ? JSON.parse(existingScans) : [];
+        scans.unshift(lightweightResult);
+        
+        // Keep only last 20 scans per profile
+        if (scans.length > 20) scans.length = 20;
+        
+        await AsyncStorage.setItem(storageKey, JSON.stringify(scans));
+      }
       
       console.log('Results saved successfully');
 
