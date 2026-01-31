@@ -120,11 +120,10 @@ export default function HistoryScreen() {
               style={styles.scanCard}
               onPress={() => viewScan(scan)}
             >
-              {/* Image Thumbnail */}
-              <Image
-                source={{ uri: `data:image/jpeg;base64,${scan.imageBase64}` }}
-                style={styles.thumbnail}
-              />
+              {/* Placeholder icon instead of image thumbnail */}
+              <View style={styles.thumbnailPlaceholder}>
+                <Ionicons name="camera" size={32} color="#00B894" />
+              </View>
 
               {/* Scan Info */}
               <View style={styles.scanInfo}>
