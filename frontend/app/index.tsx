@@ -145,7 +145,7 @@ export default function HomeScreen() {
       >
         <View style={styles.headerContent}>
           <View style={styles.headerTop}>
-            <TouchableOpacity onPress={switchProfile} style={styles.profileBadge}>
+            <TouchableOpacity onPress={() => router.push('/profile-detail')} style={styles.profileBadge}>
               <Ionicons name="person-circle" size={24} color="#FFFFFF" />
               <Text style={styles.profileName}>{activeProfile.name}</Text>
             </TouchableOpacity>
