@@ -176,6 +176,7 @@ export default function ProcessingScreen() {
     try {
       const BACKEND_URL = process.env.EXPO_PUBLIC_BACKEND_URL;
       
+      // Save full data to backend (with base64)
       const response = await fetch(`${BACKEND_URL}/api/scans`, {
         method: 'POST',
         headers: {
@@ -188,15 +189,35 @@ export default function ProcessingScreen() {
         console.error('Failed to save to backend');
       }
 
+      // Save to AsyncStorage WITHOUT base64 to save space
       const AsyncStorage = (await import('@react-native-async-storage/async-storage')).default;
+      
+      // Create lightweight version (no base64)
+      const lightweightResult = {
+        imageUri: results.imageUri,
+        // Don't store imageBase64 - too large!
+        skinTone: results.skinTone,
+        timestamp: results.timestamp,
+        analysisType: results.analysisType,
+        acne: results.acne,
+        pigmentation: results.pigmentation,
+        wrinkles: results.wrinkles,
+      };
+      
       const existingScans = await AsyncStorage.getItem('skin_scans');
       const scans = existingScans ? JSON.parse(existingScans) : [];
-      scans.unshift(results);
-      if (scans.length > 50) scans.length = 50;
+      scans.unshift(lightweightResult);
+      
+      // Keep only last 20 scans to prevent storage overflow
+      if (scans.length > 20) scans.length = 20;
+      
       await AsyncStorage.setItem('skin_scans', JSON.stringify(scans));
+      
+      console.log('Results saved successfully');
 
     } catch (error) {
       console.error('Error saving results:', error);
+      // Continue anyway - we still have the results in memory
     }
   };
 
