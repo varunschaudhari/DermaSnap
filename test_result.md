@@ -110,63 +110,78 @@ user_problem_statement: |
 backend:
   - task: "API endpoint for saving scans"
     implemented: true
-    working: "NA"
+    working: true
     file: "/app/backend/server.py"
     stuck_count: 0
     priority: "high"
-    needs_retesting: true
+    needs_retesting: false
     status_history:
       - working: "NA"
         agent: "main"
         comment: "Created POST /api/scans endpoint to save skin scan data with all metrics"
+      - working: true
+        agent: "testing"
+        comment: "✅ TESTED: POST /api/scans works perfectly. Successfully created scans with both complete (full analysis) and partial (acne-only) data. Returns proper scan ID and saves to MongoDB correctly. Handles all skin analysis types (acne, pigmentation, wrinkles)."
 
   - task: "API endpoint for retrieving scan history"
     implemented: true
-    working: "NA"
+    working: true
     file: "/app/backend/server.py"
     stuck_count: 0
     priority: "high"
-    needs_retesting: true
+    needs_retesting: false
     status_history:
       - working: "NA"
         agent: "main"
         comment: "Created GET /api/scans endpoint with pagination support"
+      - working: true
+        agent: "testing"
+        comment: "✅ TESTED: GET /api/scans works perfectly. Pagination (limit/skip) functioning correctly. Returns proper JSON array with scan data. Sorts by timestamp (newest first) as expected."
 
   - task: "API endpoint for individual scan retrieval"
     implemented: true
-    working: "NA"
+    working: true
     file: "/app/backend/server.py"
     stuck_count: 0
     priority: "medium"
-    needs_retesting: true
+    needs_retesting: false
     status_history:
       - working: "NA"
         agent: "main"
         comment: "Created GET /api/scans/{scan_id} endpoint"
+      - working: true
+        agent: "testing"
+        comment: "✅ TESTED: GET /api/scans/{scan_id} works perfectly. Retrieves complete scan data for valid IDs. Properly handles invalid ID formats (returns 400) and validates ObjectId format correctly."
 
   - task: "API endpoint for deleting scans"
     implemented: true
-    working: "NA"
+    working: true
     file: "/app/backend/server.py"
     stuck_count: 0
     priority: "low"
-    needs_retesting: true
+    needs_retesting: false
     status_history:
       - working: "NA"
         agent: "main"
         comment: "Created DELETE /api/scans/{scan_id} endpoint"
+      - working: true
+        agent: "testing"
+        comment: "✅ TESTED: DELETE /api/scans/{scan_id} works perfectly. Successfully deletes scans and removes from MongoDB. Verified deletion by confirming 404 on subsequent GET. Properly handles non-existent scan IDs (returns 404)."
 
   - task: "API endpoint for scan statistics"
     implemented: true
-    working: "NA"
+    working: true
     file: "/app/backend/server.py"
     stuck_count: 0
     priority: "low"
-    needs_retesting: true
+    needs_retesting: false
     status_history:
       - working: "NA"
         agent: "main"
         comment: "Created GET /api/scans/stats/summary endpoint for analytics"
+      - working: true
+        agent: "testing"
+        comment: "✅ TESTED: GET /api/scans/stats/summary works perfectly. Returns proper statistics with totalScans count and breakdown by analysis type (acne, pigmentation, wrinkles, full). JSON structure matches expected format."
 
 frontend:
   - task: "Home screen with disclaimer modal"
