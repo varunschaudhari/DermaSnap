@@ -265,6 +265,14 @@ const styles = StyleSheet.create({
     height: 80,
     borderRadius: 8,
   },
+  thumbnailPlaceholder: {
+    width: 80,
+    height: 80,
+    borderRadius: 8,
+    backgroundColor: '#F0F0F0',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   scanInfo: {
     flex: 1,
     marginLeft: 12,
