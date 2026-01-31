@@ -144,11 +144,20 @@ export default function HomeScreen() {
         style={styles.header}
       >
         <View style={styles.headerContent}>
+          <View style={styles.headerTop}>
+            <TouchableOpacity onPress={switchProfile} style={styles.profileBadge}>
+              <Ionicons name="person-circle" size={24} color="#FFFFFF" />
+              <Text style={styles.profileName}>{activeProfile.name}</Text>
+            </TouchableOpacity>
+            <TouchableOpacity onPress={() => router.push('/progress')} style={styles.headerIcon}>
+              <Ionicons name="bar-chart" size={24} color="#FFFFFF" />
+            </TouchableOpacity>
+          </View>
           <View style={styles.logoContainer}>
             <Ionicons name="medical" size={36} color="#FFFFFF" />
           </View>
-          <Text style={styles.appTitle}>SkinQuant AI</Text>
-          <Text style={styles.appSubtitle}>Advanced Skin Analysis</Text>
+          <Text style={styles.appTitle}>DermaSnap</Text>
+          <Text style={styles.appSubtitle}>AI-Powered Skin Analysis</Text>
         </View>
       </LinearGradient>
 
