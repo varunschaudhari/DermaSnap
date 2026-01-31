@@ -75,6 +75,22 @@ export default function HomeScreen() {
     router.push(`/camera?type=${type}`);
   };
 
+  const switchProfile = () => {
+    router.push('/profiles');
+  };
+
+  if (loading) {
+    return (
+      <View style={[styles.container, { justifyContent: 'center', alignItems: 'center' }]}>
+        <ActivityIndicator size="large" color="#00B894" />
+      </View>
+    );
+  }
+
+  if (!activeProfile) {
+    return null; // Will redirect in useEffect
+  }
+
   return (
     <View style={styles.container}>
       <StatusBar barStyle="light-content" />
