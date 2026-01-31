@@ -83,7 +83,7 @@ class ScanResponse(BaseModel):
 # Routes
 @api_router.get("/")
 async def root():
-    return {"message": "SkinQuant AI API", "version": "1.0.0"}
+    return {"message": "DermaSnap API", "version": "1.0.0", "status": "healthy"}
 
 @api_router.post("/scans", response_model=Dict[str, str])
 async def create_scan(scan: ScanData):
