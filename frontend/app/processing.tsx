@@ -1,56 +1,84 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, ActivityIndicator, Image, Alert } from 'react-native';
-import { useRouter, useLocalSearchParams } from 'expo-router';
+import { View, Text, StyleSheet, ActivityIndicator, StatusBar, Animated } from 'react-native';
+import { useRouter } from 'expo-router';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as ImageManipulator from 'expo-image-manipulator';
+import { Ionicons } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
 import { analyzeAcne, analyzePigmentation, analyzeWrinkles, detectSkinTone, getSeverityLevel } from '../utils/imageAnalysis';
+
+const STEPS = [
+  { id: 1, icon: 'image-outline', text: 'Preparing image...' },
+  { id: 2, icon: 'color-palette-outline', text: 'Analyzing skin tone...' },
+  { id: 3, icon: 'water-outline', text: 'Detecting lesions...' },
+  { id: 4, icon: 'scan-outline', text: 'Measuring pigmentation...' },
+  { id: 5, icon: 'layers-outline', text: 'Analyzing wrinkles...' },
+  { id: 6, icon: 'analytics-outline', text: 'Calculating metrics...' },
+  { id: 7, icon: 'checkmark-circle-outline', text: 'Finalizing results...' },
+];
 
 export default function ProcessingScreen() {
   const router = useRouter();
-  const { imageUri, imageBase64, analysisType } = useLocalSearchParams();
-  const [progress, setProgress] = useState(0);
-  const [currentStep, setCurrentStep] = useState('Preparing image...');
+  const [currentStep, setCurrentStep] = useState(0);
+  const [progress] = useState(new Animated.Value(0));
 
   useEffect(() => {
     processImage();
   }, []);
 
+  const animateProgress = (toValue: number) => {
+    Animated.timing(progress, {
+      toValue,
+      duration: 800,
+      useNativeDriver: false,
+    }).start();
+  };
+
   const processImage = async () => {
     try {
-      // Step 1: Resize and optimize image
-      setCurrentStep('Optimizing image...');
-      setProgress(10);
+      // Retrieve temp image data
+      const tempData = await AsyncStorage.getItem('temp_scan_image');
+      if (!tempData) {
+        throw new Error('No image data found');
+      }
+
+      const { uri, base64, analysisType, timestamp } = JSON.parse(tempData);
+      console.log('Processing image for:', analysisType);
+
+      // Step 1: Preparing image
+      setCurrentStep(0);
+      animateProgress(14);
+      await new Promise(resolve => setTimeout(resolve, 1000));
       
       const manipResult = await ImageManipulator.manipulateAsync(
-        imageUri as string,
+        uri,
         [{ resize: { width: 800 } }],
         { compress: 0.8, format: ImageManipulator.SaveFormat.JPEG, base64: true }
       );
 
-      setProgress(20);
+      // Step 2: Analyzing skin tone
+      setCurrentStep(1);
+      animateProgress(28);
+      await new Promise(resolve => setTimeout(resolve, 800));
 
-      // Step 2: Convert to canvas-compatible format
-      setCurrentStep('Analyzing skin tone...');
-      setProgress(30);
-
-      // For demo, we'll create mock analysis data since we can't use canvas in React Native
-      // In a production app, you'd use react-native-canvas or send to backend
       const mockPixelData = generateMockPixelData();
       const skinTone = detectSkinTone(mockPixelData, 800, 600);
 
-      setProgress(40);
-
+      // Initialize results
       let results: any = {
         imageUri: manipResult.uri,
-        imageBase64: manipResult.base64,
+        imageBase64: manipResult.base64 || base64,
         skinTone,
-        timestamp: new Date().toISOString(),
-        analysisType: analysisType as string,
+        timestamp,
+        analysisType,
       };
 
-      // Step 3: Run appropriate analysis
+      // Step 3: Run analyses based on type
       if (analysisType === 'acne' || analysisType === 'full') {
-        setCurrentStep('Detecting acne lesions...');
-        setProgress(50);
+        setCurrentStep(2);
+        animateProgress(42);
+        await new Promise(resolve => setTimeout(resolve, 1200));
+        
         const acneResults = analyzeAcne(mockPixelData, 800, 600, skinTone);
         results.acne = {
           ...acneResults,
@@ -59,8 +87,10 @@ export default function ProcessingScreen() {
       }
 
       if (analysisType === 'pigmentation' || analysisType === 'full') {
-        setCurrentStep('Analyzing pigmentation...');
-        setProgress(65);
+        setCurrentStep(3);
+        animateProgress(57);
+        await new Promise(resolve => setTimeout(resolve, 1200));
+        
         const pigmentationResults = analyzePigmentation(mockPixelData, 800, 600, skinTone);
         results.pigmentation = {
           ...pigmentationResults,
@@ -69,8 +99,10 @@ export default function ProcessingScreen() {
       }
 
       if (analysisType === 'wrinkles' || analysisType === 'full') {
-        setCurrentStep('Detecting wrinkles...');
-        setProgress(80);
+        setCurrentStep(4);
+        animateProgress(71);
+        await new Promise(resolve => setTimeout(resolve, 1200));
+        
         const wrinklesResults = analyzeWrinkles(mockPixelData, 800, 600);
         results.wrinkles = {
           ...wrinklesResults,
@@ -78,53 +110,59 @@ export default function ProcessingScreen() {
         };
       }
 
-      // Step 4: Save to backend and local storage
-      setCurrentStep('Saving results...');
-      setProgress(90);
-      
-      await saveResults(results);
+      // Step 6: Calculating metrics
+      setCurrentStep(5);
+      animateProgress(85);
+      await new Promise(resolve => setTimeout(resolve, 800));
 
-      setProgress(100);
-      setCurrentStep('Complete!');
+      // Step 7: Saving results
+      setCurrentStep(6);
+      animateProgress(95);
+      await saveResults(results);
+      await new Promise(resolve => setTimeout(resolve, 500));
+
+      // Complete
+      animateProgress(100);
+      await new Promise(resolve => setTimeout(resolve, 300));
+
+      // Clean up temp data
+      await AsyncStorage.removeItem('temp_scan_image');
 
       // Navigate to results
-      setTimeout(() => {
-        router.replace({
-          pathname: '/results',
-          params: {
-            resultsData: JSON.stringify(results),
-          },
-        });
-      }, 500);
+      router.replace({
+        pathname: '/results',
+        params: {
+          resultsId: Date.now().toString(), // Use timestamp as simple ID
+        },
+      });
+
+      // Store results for retrieval
+      await AsyncStorage.setItem(`scan_${Date.now()}`, JSON.stringify(results));
 
     } catch (error) {
       console.error('Error processing image:', error);
-      Alert.alert('Processing Error', 'Failed to analyze image. Please try again.');
+      // Try to go back on error
       router.back();
     }
   };
 
   const generateMockPixelData = () => {
-    // Generate realistic-looking pixel data for demo
     const width = 800;
     const height = 600;
     const data = new Uint8ClampedArray(width * height * 4);
     
     for (let i = 0; i < data.length; i += 4) {
-      // Skin-tone colors with variation
-      data[i] = 200 + Math.random() * 40;     // R
-      data[i + 1] = 150 + Math.random() * 40; // G
-      data[i + 2] = 120 + Math.random() * 40; // B
-      data[i + 3] = 255;                       // A
+      data[i] = 200 + Math.random() * 40;
+      data[i + 1] = 150 + Math.random() * 40;
+      data[i + 2] = 120 + Math.random() * 40;
+      data[i + 3] = 255;
 
-      // Add some random darker spots (lesions/pigmentation)
       if (Math.random() < 0.02) {
         data[i] = 150 + Math.random() * 30;
         data[i + 1] = 100 + Math.random() * 30;
         data[i + 2] = 80 + Math.random() * 30;
       }
       
-      // Add some red spots (acne)
       if (Math.random() < 0.015) {
         data[i] = 220 + Math.random() * 35;
         data[i + 1] = 100 + Math.random() * 30;
@@ -139,7 +177,6 @@ export default function ProcessingScreen() {
     try {
       const BACKEND_URL = process.env.EXPO_PUBLIC_BACKEND_URL;
       
-      // Save to backend
       const response = await fetch(`${BACKEND_URL}/api/scans`, {
         method: 'POST',
         headers: {
@@ -152,12 +189,10 @@ export default function ProcessingScreen() {
         console.error('Failed to save to backend');
       }
 
-      // Also save to AsyncStorage for offline access
       const AsyncStorage = (await import('@react-native-async-storage/async-storage')).default;
       const existingScans = await AsyncStorage.getItem('skin_scans');
       const scans = existingScans ? JSON.parse(existingScans) : [];
       scans.unshift(results);
-      // Keep only last 50 scans
       if (scans.length > 50) scans.length = 50;
       await AsyncStorage.setItem('skin_scans', JSON.stringify(scans));
 
@@ -166,24 +201,68 @@ export default function ProcessingScreen() {
     }
   };
 
+  const progressWidth = progress.interpolate({
+    inputRange: [0, 100],
+    outputRange: ['0%', '100%'],
+  });
+
   return (
     <View style={styles.container}>
-      <View style={styles.content}>
-        <ActivityIndicator size="large" color="#4A90E2" style={styles.loader} />
-        
-        <Text style={styles.title}>Analyzing Your Skin</Text>
-        <Text style={styles.stepText}>{currentStep}</Text>
+      <StatusBar barStyle="dark-content" />
+      
+      <LinearGradient
+        colors={['#F7FFFE', '#E8F8F5']}
+        style={styles.gradient}
+      >
+        <View style={styles.content}>
+          {/* Animated Icon */}
+          <View style={styles.iconContainer}>
+            <View style={styles.iconCircle}>
+              <Ionicons 
+                name={STEPS[currentStep]?.icon as any} 
+                size={48} 
+                color="#00B894" 
+              />
+            </View>
+            <View style={styles.pulseCircle1} />
+            <View style={styles.pulseCircle2} />
+          </View>
 
-        {/* Progress Bar */}
-        <View style={styles.progressContainer}>
-          <View style={[styles.progressBar, { width: `${progress}%` }]} />
+          <Text style={styles.title}>Analyzing Your Skin</Text>
+          <Text style={styles.stepText}>{STEPS[currentStep]?.text}</Text>
+
+          {/* Progress Bar */}
+          <View style={styles.progressContainer}>
+            <Animated.View style={[styles.progressBar, { width: progressWidth }]} />
+          </View>
+
+          {/* Step Indicators */}
+          <View style={styles.stepsContainer}>
+            {STEPS.map((step, index) => (
+              <View key={step.id} style={styles.stepIndicator}>
+                <View
+                  style={[
+                    styles.stepDot,
+                    index <= currentStep && styles.stepDotActive,
+                  ]}
+                />
+                {index < STEPS.length - 1 && (
+                  <View
+                    style={[
+                      styles.stepLine,
+                      index < currentStep && styles.stepLineActive,
+                    ]}
+                  />
+                )}
+              </View>
+            ))}
+          </View>
+
+          <Text style={styles.infoText}>
+            Using advanced computer vision algorithms to assess your skin condition
+          </Text>
         </View>
-        <Text style={styles.progressText}>{progress}%</Text>
-
-        <Text style={styles.infoText}>
-          Using advanced computer vision algorithms to analyze your skin condition.
-        </Text>
-      </View>
+      </LinearGradient>
     </View>
   );
 }
@@ -191,7 +270,10 @@ export default function ProcessingScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F8F9FA',
+    backgroundColor: '#F7FFFE',
+  },
+  gradient: {
+    flex: 1,
   },
   content: {
     flex: 1,
@@ -199,45 +281,102 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     padding: 32,
   },
-  loader: {
-    marginBottom: 32,
+  iconContainer: {
+    position: 'relative',
+    marginBottom: 40,
+  },
+  iconCircle: {
+    width: 120,
+    height: 120,
+    borderRadius: 60,
+    backgroundColor: '#FFFFFF',
+    alignItems: 'center',
+    justifyContent: 'center',
+    elevation: 8,
+    shadowColor: '#00B894',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.2,
+    shadowRadius: 12,
+    zIndex: 3,
+  },
+  pulseCircle1: {
+    position: 'absolute',
+    width: 140,
+    height: 140,
+    borderRadius: 70,
+    backgroundColor: '#00CEC9',
+    opacity: 0.1,
+    zIndex: 2,
+  },
+  pulseCircle2: {
+    position: 'absolute',
+    width: 160,
+    height: 160,
+    borderRadius: 80,
+    backgroundColor: '#00CEC9',
+    opacity: 0.05,
+    zIndex: 1,
   },
   title: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    color: '#2C3E50',
+    fontSize: 28,
+    fontWeight: '700',
+    color: '#2D3436',
     marginBottom: 12,
     textAlign: 'center',
+    letterSpacing: -0.5,
   },
   stepText: {
     fontSize: 16,
-    color: '#7F8C8D',
-    marginBottom: 24,
+    color: '#00B894',
+    marginBottom: 32,
     textAlign: 'center',
+    fontWeight: '600',
   },
   progressContainer: {
     width: '100%',
-    height: 8,
-    backgroundColor: '#E0E0E0',
-    borderRadius: 4,
+    height: 6,
+    backgroundColor: '#E8F8F5',
+    borderRadius: 3,
     overflow: 'hidden',
-    marginBottom: 12,
+    marginBottom: 32,
   },
   progressBar: {
     height: '100%',
-    backgroundColor: '#4A90E2',
-    borderRadius: 4,
+    backgroundColor: '#00B894',
+    borderRadius: 3,
   },
-  progressText: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: '#4A90E2',
-    marginBottom: 24,
+  stepsContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 32,
+  },
+  stepIndicator: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  stepDot: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    backgroundColor: '#DFE6E9',
+  },
+  stepDotActive: {
+    backgroundColor: '#00B894',
+  },
+  stepLine: {
+    width: 20,
+    height: 2,
+    backgroundColor: '#DFE6E9',
+  },
+  stepLineActive: {
+    backgroundColor: '#00B894',
   },
   infoText: {
     fontSize: 14,
-    color: '#95A5A6',
+    color: '#636E72',
     textAlign: 'center',
     lineHeight: 20,
+    fontWeight: '400',
   },
 });
