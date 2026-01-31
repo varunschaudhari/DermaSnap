@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Modal, Dimensions, StatusBar } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Modal, Dimensions, StatusBar, ActivityIndicator } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -7,14 +7,43 @@ import { LinearGradient } from 'expo-linear-gradient';
 
 const { width } = Dimensions.get('window');
 
+interface Profile {
+  id: string;
+  name: string;
+  age?: number;
+  gender?: string;
+}
+
 export default function HomeScreen() {
   const router = useRouter();
   const [showDisclaimer, setShowDisclaimer] = useState(true);
   const [disclaimerAccepted, setDisclaimerAccepted] = useState(false);
+  const [activeProfile, setActiveProfile] = useState<Profile | null>(null);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    checkDisclaimerStatus();
+    initializeApp();
   }, []);
+
+  const initializeApp = async () => {
+    await checkProfile();
+    await checkDisclaimerStatus();
+    setLoading(false);
+  };
+
+  const checkProfile = async () => {
+    try {
+      const profileData = await AsyncStorage.getItem('active_profile');
+      if (!profileData) {
+        // No active profile, redirect to profile selection
+        router.replace('/profiles');
+        return;
+      }
+      setActiveProfile(JSON.parse(profileData));
+    } catch (error) {
+      console.error('Error checking profile:', error);
+    }
+  };
 
   const checkDisclaimerStatus = async () => {
     try {
