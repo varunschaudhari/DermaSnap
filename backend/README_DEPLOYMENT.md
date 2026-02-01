@@ -14,7 +14,7 @@ Set these in Render dashboard:
 ```
 MONGO_URL=mongodb+srv://username:password@cluster.mongodb.net/dermasnap?retryWrites=true&w=majority
 DB_NAME=dermasnap
-HUGGING_FACE_HUB_TOKEN=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
+HUGGING_FACE_HUB_TOKEN=your_token_here
 ```
 
 ## Important Notes

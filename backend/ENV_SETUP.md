@@ -39,7 +39,7 @@ cd backend
 @"
 MONGO_URL=mongodb://localhost:27017
 DB_NAME=dermasnap
-HUGGING_FACE_HUB_TOKEN=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
+HUGGING_FACE_HUB_TOKEN=your_token_here
 "@ | Out-File -FilePath .env -Encoding utf8
 ```
 
@@ -49,7 +49,7 @@ cd backend
 cat > .env << EOF
 MONGO_URL=mongodb://localhost:27017
 DB_NAME=dermasnap
-HUGGING_FACE_HUB_TOKEN=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
+HUGGING_FACE_HUB_TOKEN=your_token_here
 EOF
 ```
 
