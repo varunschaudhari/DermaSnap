@@ -9,6 +9,11 @@ import { analyzeAcne, analyzePigmentation, analyzeWrinkles, detectSkinTone, getS
 import { extractPixelsFromBase64, extractPixelsViaBackend } from '../utils/imagePixelExtraction';
 import { cleanupOldScans } from '../utils/storageCleanup';
 
+interface SaveScanResponse {
+  id: string;
+  message: string;
+}
+
 const STEPS = [
   { id: 1, icon: 'image-outline', text: 'Preparing image...' },
   { id: 2, icon: 'color-palette-outline', text: 'Analyzing skin tone...' },
@@ -271,7 +276,7 @@ export default function ProcessingScreen() {
             timestamp: new Date().toISOString(),
           }),
           // Add timeout using AbortController (compatible with React Native)
-          signal: createTimeoutSignal(30000), // 30 second timeout
+          signal: createTimeoutSignal(30000) as any, // 30 second timeout
         });
 
         if (!response.ok) {
@@ -345,7 +350,7 @@ export default function ProcessingScreen() {
           throw new Error(`Backend save failed: ${response.status} - ${errorText}`);
         }
         
-        const savedData = await response.json();
+        const savedData = await response.json() as SaveScanResponse;
         const scanId = savedData.id;
         console.log('✅ Results saved to database successfully, ID:', scanId);
         
@@ -424,7 +429,7 @@ export default function ProcessingScreen() {
             throw new Error(`Backend save failed after retry: ${retryResponse.status} - ${errorText}`);
           }
           
-          const retrySavedData = await retryResponse.json();
+          const retrySavedData = await retryResponse.json() as SaveScanResponse;
           console.log('✅ Results saved to database on retry, ID:', retrySavedData.id);
           
           // Update metadata with retry ID

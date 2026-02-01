@@ -6,6 +6,19 @@ import { LinearGradient } from 'expo-linear-gradient';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { getRecommendations } from '../utils/imageAnalysis';
 
+interface ScanData {
+  _id?: string;
+  imageUri: string;
+  imageBase64?: string;
+  skinTone: string;
+  timestamp: string;
+  analysisType: string;
+  acne?: any;
+  pigmentation?: any;
+  wrinkles?: any;
+  profileId?: string;
+}
+
 const { width } = Dimensions.get('window');
 
 export default function ResultsScreen() {
@@ -32,7 +45,7 @@ export default function ResultsScreen() {
         try {
           const response = await fetch(`${BACKEND_URL}/api/scans/${scanId}`);
           if (response.ok) {
-            const fullScan = await response.json();
+            const fullScan = await response.json() as ScanData;
             setResults(fullScan);
             
             if (fullScan.analysisType === 'full') {
@@ -75,7 +88,7 @@ export default function ResultsScreen() {
           try {
             const response = await fetch(`${BACKEND_URL}/api/scans/${data.databaseId}`);
             if (response.ok) {
-              const fullScan = await response.json();
+              const fullScan = await response.json() as ScanData;
               setResults(fullScan);
               if (fullScan.analysisType === 'full') {
                 setSelectedTab('acne');
