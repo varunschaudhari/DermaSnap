@@ -1,11 +1,13 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, ActivityIndicator, StatusBar, Animated } from 'react-native';
+import { View, Text, StyleSheet, ActivityIndicator, StatusBar, Animated, Alert } from 'react-native';
 import { useRouter } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as ImageManipulator from 'expo-image-manipulator';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { analyzeAcne, analyzePigmentation, analyzeWrinkles, detectSkinTone, getSeverityLevel } from '../utils/imageAnalysis';
+import { extractPixelsFromBase64, extractPixelsViaBackend } from '../utils/imagePixelExtraction';
+import { cleanupOldScans } from '../utils/storageCleanup';
 
 const STEPS = [
   { id: 1, icon: 'image-outline', text: 'Preparing image...' },
@@ -65,8 +67,26 @@ export default function ProcessingScreen() {
       animateProgress(28);
       await new Promise(resolve => setTimeout(resolve, 800));
 
-      const mockPixelData = generateMockPixelData();
-      const skinTone = detectSkinTone(mockPixelData, 800, 600);
+      // Extract actual pixel data from image
+      let pixelData: Uint8ClampedArray;
+      try {
+        // Try backend extraction first (more accurate)
+        pixelData = await extractPixelsViaBackend(
+          manipResult.base64 || base64,
+          800,
+          600
+        );
+      } catch (error) {
+        console.warn('Backend pixel extraction failed, using local extraction:', error);
+        // Fallback to local extraction
+        pixelData = await extractPixelsFromBase64(
+          manipResult.base64 || base64,
+          800,
+          600
+        );
+      }
+      
+      const skinTone = detectSkinTone(pixelData, 800, 600);
 
       // Initialize results
       let results: any = {
@@ -77,41 +97,109 @@ export default function ProcessingScreen() {
         analysisType,
       };
 
-      // Step 3: Run analyses based on type
-      if (analysisType === 'acne' || analysisType === 'full') {
+      // Step 3: Try ML analysis first, fallback to rule-based
+      let mlAnalysis: any = null;
+      let useML = false;
+
+      try {
+        // Try MedGemma ML analysis
+        setCurrentStep(2);
+        animateProgress(35);
+        mlAnalysis = await analyzeWithMedGemma(
+          manipResult.base64 || base64,
+          analysisType
+        );
+        useML = true;
+        console.log('✅ MedGemma analysis successful');
+      } catch (error) {
+        console.log('⚠️ MedGemma not available, using rule-based analysis');
+        useML = false;
+      }
+
+      // Step 4: Run analyses based on type
+      if (useML && mlAnalysis) {
+        // Use ML results for severity, combine with rule-based for precise metrics
+        setCurrentStep(3);
+        animateProgress(50);
+        
+        // Get rule-based results for precise metrics
+        const acneResults = analyzeAcne(pixelData, 800, 600, skinTone);
+        const pigmentationResults = analyzePigmentation(pixelData, 800, 600, skinTone);
+        const wrinklesResults = analyzeWrinkles(pixelData, 800, 600);
+        
+        // Combine: rule-based metrics + ML severity
+        if (analysisType === 'acne' || analysisType === 'full') {
+          const mlAcne = mlAnalysis.parsed?.acne || {};
+          results.acne = {
+            ...acneResults,
+            severity: mlAcne.severity || getSeverityLevel(acneResults.metrics, 'acne'),
+            mlAnalysis: mlAnalysis.analysis,
+            mlConfidence: mlAnalysis.confidence,
+            method: 'hybrid',
+          };
+        }
+
+        if (analysisType === 'pigmentation' || analysisType === 'full') {
+          const mlPig = mlAnalysis.parsed?.pigmentation || {};
+          results.pigmentation = {
+            ...pigmentationResults,
+            severity: mlPig.severity || getSeverityLevel(pigmentationResults.metrics, 'pigmentation'),
+            mlAnalysis: mlAnalysis.analysis,
+            mlConfidence: mlAnalysis.confidence,
+            method: 'hybrid',
+          };
+        }
+
+        if (analysisType === 'wrinkles' || analysisType === 'full') {
+          const mlWrinkles = mlAnalysis.parsed?.wrinkles || {};
+          results.wrinkles = {
+            ...wrinklesResults,
+            severity: mlWrinkles.severity || getSeverityLevel(wrinklesResults.metrics, 'wrinkles'),
+            mlAnalysis: mlAnalysis.analysis,
+            mlConfidence: mlAnalysis.confidence,
+            method: 'hybrid',
+          };
+        }
+      } else {
+        // Fallback to rule-based only
         setCurrentStep(2);
         animateProgress(42);
         await new Promise(resolve => setTimeout(resolve, 1200));
         
-        const acneResults = analyzeAcne(mockPixelData, 800, 600, skinTone);
-        results.acne = {
-          ...acneResults,
-          severity: getSeverityLevel(acneResults.metrics, 'acne'),
-        };
-      }
+        if (analysisType === 'acne' || analysisType === 'full') {
+          const acneResults = analyzeAcne(pixelData, 800, 600, skinTone);
+          results.acne = {
+            ...acneResults,
+            severity: getSeverityLevel(acneResults.metrics, 'acne'),
+            method: 'rule-based',
+          };
+        }
 
-      if (analysisType === 'pigmentation' || analysisType === 'full') {
-        setCurrentStep(3);
-        animateProgress(57);
-        await new Promise(resolve => setTimeout(resolve, 1200));
-        
-        const pigmentationResults = analyzePigmentation(mockPixelData, 800, 600, skinTone);
-        results.pigmentation = {
-          ...pigmentationResults,
-          severity: getSeverityLevel(pigmentationResults.metrics, 'pigmentation'),
-        };
-      }
+        if (analysisType === 'pigmentation' || analysisType === 'full') {
+          setCurrentStep(3);
+          animateProgress(57);
+          await new Promise(resolve => setTimeout(resolve, 1200));
+          
+          const pigmentationResults = analyzePigmentation(pixelData, 800, 600, skinTone);
+          results.pigmentation = {
+            ...pigmentationResults,
+            severity: getSeverityLevel(pigmentationResults.metrics, 'pigmentation'),
+            method: 'rule-based',
+          };
+        }
 
-      if (analysisType === 'wrinkles' || analysisType === 'full') {
-        setCurrentStep(4);
-        animateProgress(71);
-        await new Promise(resolve => setTimeout(resolve, 1200));
-        
-        const wrinklesResults = analyzeWrinkles(mockPixelData, 800, 600);
-        results.wrinkles = {
-          ...wrinklesResults,
-          severity: getSeverityLevel(wrinklesResults.metrics, 'wrinkles'),
-        };
+        if (analysisType === 'wrinkles' || analysisType === 'full') {
+          setCurrentStep(4);
+          animateProgress(71);
+          await new Promise(resolve => setTimeout(resolve, 1200));
+          
+          const wrinklesResults = analyzeWrinkles(pixelData, 800, 600);
+          results.wrinkles = {
+            ...wrinklesResults,
+            severity: getSeverityLevel(wrinklesResults.metrics, 'wrinkles'),
+            method: 'rule-based',
+          };
+        }
       }
 
       // Step 6: Calculating metrics
@@ -122,6 +210,14 @@ export default function ProcessingScreen() {
       // Step 7: Saving results
       setCurrentStep(6);
       animateProgress(95);
+      
+      // Cleanup old scans before saving (to prevent storage full errors)
+      try {
+        await cleanupOldScans(5); // Keep only 5 most recent scans per profile
+      } catch (cleanupError) {
+        console.warn('Cleanup failed, continuing anyway:', cleanupError);
+      }
+      
       await saveResults(results);
       await new Promise(resolve => setTimeout(resolve, 500));
 
@@ -129,11 +225,12 @@ export default function ProcessingScreen() {
       animateProgress(100);
       await new Promise(resolve => setTimeout(resolve, 300));
 
-      // Clean up temp data
-      await AsyncStorage.removeItem('temp_scan_image');
-      
-      // Store as latest scan result for results screen
-      await AsyncStorage.setItem('latest_scan_result', JSON.stringify(results));
+      // Clean up temp data (always try, but don't fail if it errors)
+      try {
+        await AsyncStorage.removeItem('temp_scan_image');
+      } catch (error) {
+        console.warn('Failed to cleanup temp data:', error);
+      }
 
       // Navigate to results
       router.replace('/results');
@@ -145,31 +242,69 @@ export default function ProcessingScreen() {
     }
   };
 
-  const generateMockPixelData = () => {
-    const width = 800;
-    const height = 600;
-    const data = new Uint8ClampedArray(width * height * 4);
-    
-    for (let i = 0; i < data.length; i += 4) {
-      data[i] = 200 + Math.random() * 40;
-      data[i + 1] = 150 + Math.random() * 40;
-      data[i + 2] = 120 + Math.random() * 40;
-      data[i + 3] = 255;
+  // generateMockPixelData removed - now using extractPixelsFromBase64/extractPixelsViaBackend
 
-      if (Math.random() < 0.02) {
-        data[i] = 150 + Math.random() * 30;
-        data[i + 1] = 100 + Math.random() * 30;
-        data[i + 2] = 80 + Math.random() * 30;
-      }
-      
-      if (Math.random() < 0.015) {
-        data[i] = 220 + Math.random() * 35;
-        data[i + 1] = 100 + Math.random() * 30;
-        data[i + 2] = 100 + Math.random() * 30;
+  const analyzeWithMedGemma = async (
+    imageBase64: string,
+    analysisType: string,
+    retries: number = 3
+  ): Promise<any> => {
+    const BACKEND_URL = process.env.EXPO_PUBLIC_BACKEND_URL;
+    
+    // Create timeout helper (AbortSignal.timeout not available in React Native)
+    const createTimeoutSignal = (timeoutMs: number): AbortSignal => {
+      const controller = new AbortController();
+      setTimeout(() => controller.abort(), timeoutMs);
+      return controller.signal;
+    };
+    
+    for (let attempt = 1; attempt <= retries; attempt++) {
+      try {
+        const response = await fetch(`${BACKEND_URL}/api/analyze/ml`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            imageBase64,
+            analysisType,
+            timestamp: new Date().toISOString(),
+          }),
+          // Add timeout using AbortController (compatible with React Native)
+          signal: createTimeoutSignal(30000), // 30 second timeout
+        });
+
+        if (!response.ok) {
+          const errorText = await response.text();
+          throw new Error(`ML analysis failed (${response.status}): ${errorText}`);
+        }
+
+        return await response.json();
+      } catch (error: any) {
+        const isLastAttempt = attempt === retries;
+        const isTimeout = error.name === 'TimeoutError' || error.name === 'AbortError';
+        const isNetworkError = error.message?.includes('fetch') || error.message?.includes('network');
+        
+        console.warn(
+          `MedGemma analysis attempt ${attempt}/${retries} failed:`,
+          error.message || error
+        );
+        
+        if (isLastAttempt) {
+          // Final attempt failed - throw to trigger fallback
+          throw new Error(
+            `ML analysis failed after ${retries} attempts. ${isTimeout ? 'Request timed out.' : isNetworkError ? 'Network error.' : 'Server error.'}`
+          );
+        }
+        
+        // Wait before retry (exponential backoff)
+        const delay = Math.min(1000 * Math.pow(2, attempt - 1), 5000);
+        await new Promise(resolve => setTimeout(resolve, delay));
       }
     }
-
-    return data;
+    
+    // Should never reach here, but TypeScript needs it
+    throw new Error('ML analysis failed after all retries');
   };
 
   const saveResults = async (results: any) => {
@@ -180,50 +315,158 @@ export default function ProcessingScreen() {
       const profileData = await AsyncStorage.getItem('active_profile');
       const profile = profileData ? JSON.parse(profileData) : null;
       
-      // Save full data to backend (with base64)
-      const response = await fetch(`${BACKEND_URL}/api/scans`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          ...results,
-          profileId: profile?.id,
-        }),
-      });
-
-      if (!response.ok) {
-        console.error('Failed to save to backend');
-      }
-
-      if (profile) {
-        // Save to profile-specific AsyncStorage WITHOUT base64
-        const lightweightResult = {
-          imageUri: results.imageUri,
-          skinTone: results.skinTone,
-          timestamp: results.timestamp,
-          analysisType: results.analysisType,
-          acne: results.acne,
-          pigmentation: results.pigmentation,
-          wrinkles: results.wrinkles,
-        };
-        
-        const storageKey = `skin_scans_${profile.id}`;
-        const existingScans = await AsyncStorage.getItem(storageKey);
-        const scans = existingScans ? JSON.parse(existingScans) : [];
-        scans.unshift(lightweightResult);
-        
-        // Keep only last 20 scans per profile
-        if (scans.length > 20) scans.length = 20;
-        
-        await AsyncStorage.setItem(storageKey, JSON.stringify(scans));
+      // PRIMARY: Save full data to backend database (with imageBase64)
+      // Images are now stored in database, not local storage
+      if (!BACKEND_URL) {
+        throw new Error('Backend URL not configured. Set EXPO_PUBLIC_BACKEND_URL in frontend/.env');
       }
       
-      console.log('Results saved successfully');
+      try {
+        const response = await fetch(`${BACKEND_URL}/api/scans`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            imageUri: results.imageUri,
+            imageBase64: results.imageBase64, // Store image in database
+            skinTone: results.skinTone,
+            timestamp: results.timestamp,
+            analysisType: results.analysisType,
+            acne: results.acne,
+            pigmentation: results.pigmentation,
+            wrinkles: results.wrinkles,
+            profileId: profile?.id,
+          }),
+        });
 
-    } catch (error) {
-      console.error('Error saving results:', error);
-      // Continue anyway - we still have the results in memory
+        if (!response.ok) {
+          const errorText = await response.text();
+          throw new Error(`Backend save failed: ${response.status} - ${errorText}`);
+        }
+        
+        const savedData = await response.json();
+        const scanId = savedData.id;
+        console.log('✅ Results saved to database successfully, ID:', scanId);
+        
+        // Store scan ID for reference (lightweight, no image data)
+        if (profile && scanId) {
+          try {
+            const storageKey = `skin_scans_${profile.id}`;
+            const existingScans = await AsyncStorage.getItem(storageKey);
+            const scans = existingScans ? JSON.parse(existingScans) : [];
+            
+            // Store only metadata (no image data) - images are in database
+            const scanMetadata = {
+              id: scanId, // Database ID
+              timestamp: results.timestamp,
+              analysisType: results.analysisType,
+              acne: results.acne ? { severity: results.acne.severity } : null,
+              pigmentation: results.pigmentation ? { severity: results.pigmentation.severity } : null,
+              wrinkles: results.wrinkles ? { severity: results.wrinkles.severity } : null,
+            };
+            
+            scans.unshift(scanMetadata);
+            
+            // Keep only last 50 scan IDs (just metadata, very small)
+            if (scans.length > 50) scans.length = 50;
+            
+            await AsyncStorage.setItem(storageKey, JSON.stringify(scans));
+          } catch (storageError: any) {
+            // Storage error for metadata is not critical
+            console.warn('Failed to save scan metadata locally:', storageError);
+          }
+        }
+        
+        // Save latest scan result for immediate display (without image - image is in database)
+        if (scanId) {
+          try {
+            const lightweightResults = {
+              ...results,
+              imageBase64: undefined, // NEVER store base64 locally - it's in database
+              imageUri: results.imageUri, // Keep URI for reference only
+              databaseId: scanId, // Store database ID for reference
+            };
+            await AsyncStorage.setItem('latest_scan_result', JSON.stringify(lightweightResults));
+          } catch (storageError: any) {
+            // Not critical - we can fetch from database using scanId if needed
+            console.warn('Failed to save latest scan locally (non-critical):', storageError);
+          }
+        }
+        
+      } catch (backendError: any) {
+        console.error('❌ Backend save failed:', backendError.message || backendError);
+        // Retry once after a short delay
+        console.log('Retrying backend save...');
+        await new Promise(resolve => setTimeout(resolve, 1000));
+        
+        try {
+          const retryResponse = await fetch(`${BACKEND_URL}/api/scans`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              imageUri: results.imageUri,
+              imageBase64: results.imageBase64,
+              skinTone: results.skinTone,
+              timestamp: results.timestamp,
+              analysisType: results.analysisType,
+              acne: results.acne,
+              pigmentation: results.pigmentation,
+              wrinkles: results.wrinkles,
+              profileId: profile?.id,
+            }),
+          });
+
+          if (!retryResponse.ok) {
+            const errorText = await retryResponse.text();
+            throw new Error(`Backend save failed after retry: ${retryResponse.status} - ${errorText}`);
+          }
+          
+          const retrySavedData = await retryResponse.json();
+          console.log('✅ Results saved to database on retry, ID:', retrySavedData.id);
+          
+          // Update metadata with retry ID
+          if (profile && retrySavedData.id) {
+            try {
+              const storageKey = `skin_scans_${profile.id}`;
+              const existingScans = await AsyncStorage.getItem(storageKey);
+              const scans = existingScans ? JSON.parse(existingScans) : [];
+              
+              const scanMetadata = {
+                id: retrySavedData.id,
+                timestamp: results.timestamp,
+                analysisType: results.analysisType,
+                acne: results.acne ? { severity: results.acne.severity } : null,
+                pigmentation: results.pigmentation ? { severity: results.pigmentation.severity } : null,
+                wrinkles: results.wrinkles ? { severity: results.wrinkles.severity } : null,
+              };
+              
+              scans.unshift(scanMetadata);
+              if (scans.length > 50) scans.length = 50;
+              await AsyncStorage.setItem(storageKey, JSON.stringify(scans));
+            } catch (storageError) {
+              console.warn('Failed to save scan metadata locally:', storageError);
+            }
+          }
+        } catch (retryError: any) {
+          console.error('❌ Backend save failed after retry:', retryError.message || retryError);
+          throw new Error(`Failed to save to database after retry: ${retryError.message}`);
+        }
+      }
+      
+      console.log('✅ Results saved successfully to database');
+
+    } catch (error: any) {
+      console.error('❌ Error saving results:', error);
+      // Show user-friendly error but don't crash
+      Alert.alert(
+        'Save Failed',
+        error.message || 'Failed to save scan. Results are still available but may not be saved.',
+        [{ text: 'OK' }]
+      );
+      // Don't throw - allow navigation to results even if save fails
     }
   };
 

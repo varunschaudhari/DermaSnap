@@ -10,24 +10,88 @@ const { width } = Dimensions.get('window');
 
 export default function ResultsScreen() {
   const router = useRouter();
-  const { resultsId } = useLocalSearchParams();
+  const params = useLocalSearchParams();
   const [results, setResults] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [selectedTab, setSelectedTab] = useState<string>('acne');
 
+  // Normalize params (useLocalSearchParams can return string | string[])
+  const scanId = Array.isArray(params.scanId) ? params.scanId[0] : params.scanId;
+  const resultsData = Array.isArray(params.resultsData) ? params.resultsData[0] : params.resultsData;
+
   useEffect(() => {
     loadResults();
-  }, []);
+  }, [scanId, resultsData]);
 
   const loadResults = async () => {
     try {
-      // First try to get from latest scan storage
+      const BACKEND_URL = process.env.EXPO_PUBLIC_BACKEND_URL;
+      
+      // If scanId provided, fetch full data from database (includes image)
+      if (scanId && BACKEND_URL) {
+        try {
+          const response = await fetch(`${BACKEND_URL}/api/scans/${scanId}`);
+          if (response.ok) {
+            const fullScan = await response.json();
+            setResults(fullScan);
+            
+            if (fullScan.analysisType === 'full') {
+              setSelectedTab('acne');
+            } else {
+              setSelectedTab(fullScan.analysisType);
+            }
+            setLoading(false);
+            return;
+          }
+        } catch (dbError) {
+          console.warn('Failed to load from database:', dbError);
+        }
+      }
+      
+      // Try resultsData from params (legacy)
+      if (resultsData) {
+        try {
+          const data = JSON.parse(resultsData);
+          setResults(data);
+          if (data.analysisType === 'full') {
+            setSelectedTab('acne');
+          } else {
+            setSelectedTab(data.analysisType);
+          }
+          setLoading(false);
+          return;
+        } catch (error) {
+          console.warn('Failed to parse resultsData:', error);
+        }
+      }
+      
+      // Fallback: try latest scan from local storage (should have databaseId)
       const latestScan = await AsyncStorage.getItem('latest_scan_result');
       if (latestScan) {
         const data = JSON.parse(latestScan);
-        setResults(data);
         
-        // Set initial tab based on analysis type
+        // If we have a databaseId, try to fetch full data from backend
+        if (data.databaseId && BACKEND_URL) {
+          try {
+            const response = await fetch(`${BACKEND_URL}/api/scans/${data.databaseId}`);
+            if (response.ok) {
+              const fullScan = await response.json();
+              setResults(fullScan);
+              if (fullScan.analysisType === 'full') {
+                setSelectedTab('acne');
+              } else {
+                setSelectedTab(fullScan.analysisType);
+              }
+              setLoading(false);
+              return;
+            }
+          } catch (dbError) {
+            console.warn('Failed to fetch from database using databaseId:', dbError);
+          }
+        }
+        
+        // Use local data as last resort (without image)
+        setResults(data);
         if (data.analysisType === 'full') {
           setSelectedTab('acne');
         } else {

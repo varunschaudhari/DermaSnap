@@ -22,14 +22,43 @@ export default function ProgressScreen() {
 
   const loadData = async () => {
     try {
+      const BACKEND_URL = process.env.EXPO_PUBLIC_BACKEND_URL;
       const profileData = await AsyncStorage.getItem('active_profile');
-      if (profileData) {
-        const profile = JSON.parse(profileData);
+      const profile = profileData ? JSON.parse(profileData) : null;
+      
+      if (profile) {
         setActiveProfile(profile);
-        
-        const scansData = await AsyncStorage.getItem(`skin_scans_${profile.id}`);
+      }
+      
+      // PRIMARY: Load from backend database (includes all data and images)
+      if (BACKEND_URL) {
+        try {
+          const response = await fetch(`${BACKEND_URL}/api/scans?limit=100`);
+          if (response.ok) {
+            const dbScans = await response.json();
+            // Filter by profile if available
+            const filteredScans = profile 
+              ? dbScans.filter((scan: any) => scan.profileId === profile.id)
+              : dbScans;
+            
+            if (filteredScans.length > 0) {
+              setScans(filteredScans);
+              setLoading(false);
+              return;
+            }
+          }
+        } catch (dbError) {
+          console.warn('Failed to load from database:', dbError);
+        }
+      }
+      
+      // Fallback: Load metadata from local storage (no images)
+      if (profile) {
+        const storageKey = `skin_scans_${profile.id}`;
+        const scansData = await AsyncStorage.getItem(storageKey);
         if (scansData) {
-          setScans(JSON.parse(scansData));
+          const scanMetadata = JSON.parse(scansData);
+          setScans(scanMetadata);
         }
       }
     } catch (error) {

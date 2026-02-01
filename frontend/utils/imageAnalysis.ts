@@ -1,7 +1,14 @@
 // Image processing and analysis utilities
 
+// Type for image data (React Native compatible, not browser ImageData)
+interface ImageDataLike {
+  data: Uint8ClampedArray;
+  width?: number;
+  height?: number;
+}
+
 // Convert image to grayscale for analysis
-export const toGrayscale = (imageData: ImageData): ImageData => {
+export const toGrayscale = (imageData: ImageDataLike): ImageDataLike => {
   const data = imageData.data;
   for (let i = 0; i < data.length; i += 4) {
     const gray = 0.299 * data[i] + 0.587 * data[i + 1] + 0.114 * data[i + 2];
@@ -312,8 +319,10 @@ export const analyzePigmentation = (pixels: Uint8ClampedArray, width: number, he
         const region = growRegion(pixels, width, height, x, y, visited, 'pigmentation');
         if (region.area > 5) {
           const intensityDiff = ((skinTone.r + skinTone.g + skinTone.b) / 3) - region.centerIntensity;
-          region.intensityDiff = intensityDiff;
-          pigmentedRegions.push(region);
+          pigmentedRegions.push({
+            ...region,
+            intensityDiff,
+          });
           totalPigmentedPixels += region.area;
           totalIntensityDiff += intensityDiff;
         }

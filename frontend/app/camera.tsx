@@ -35,7 +35,7 @@ export default function CameraScreen() {
     return (
       <View style={styles.permissionContainer}>
         <View style={styles.permissionIconContainer}>
-          <Ionicons name="camera-off" size={64} color="#00B894" />
+          <Ionicons name="camera-outline" size={64} color="#00B894" />
         </View>
         <Text style={styles.permissionTitle}>Camera Access Required</Text>
         <Text style={styles.permissionText}>
@@ -174,7 +174,6 @@ export default function CameraScreen() {
             textAnchor="middle"
             stroke="#000000"
             strokeWidth="4"
-            paintOrder="stroke"
           >
             Align your face within the oval
           </SvgText>

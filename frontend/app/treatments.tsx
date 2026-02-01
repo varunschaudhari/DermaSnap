@@ -6,6 +6,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { format } from 'date-fns';
 import * as Notifications from 'expo-notifications';
+import Constants from 'expo-constants';
 
 interface Treatment {
   id: string;
@@ -18,14 +19,27 @@ interface Treatment {
   reminderTime?: string;
 }
 
-// Configure notifications
-Notifications.setNotificationHandler({
-  handleNotification: async () => ({
-    shouldShowAlert: true,
-    shouldPlaySound: true,
-    shouldSetBadge: false,
-  }),
-});
+// Check if notifications are available (not in Expo Go)
+const isExpoGo = Constants.appOwnership === 'expo';
+let notificationsAvailable = !isExpoGo;
+
+// Configure notifications only if available (not in Expo Go)
+if (notificationsAvailable) {
+  try {
+    Notifications.setNotificationHandler({
+      handleNotification: async () => ({
+        shouldShowAlert: true,
+        shouldPlaySound: true,
+        shouldSetBadge: false,
+      }),
+    });
+  } catch (error) {
+    console.warn('Failed to configure notifications:', error);
+    notificationsAvailable = false;
+  }
+} else {
+  console.log('Notifications not available in Expo Go - treatment reminders will be disabled');
+}
 
 export default function TreatmentsScreen() {
   const router = useRouter();
@@ -47,10 +61,19 @@ export default function TreatmentsScreen() {
   }, []);
 
   const requestNotificationPermissions = async () => {
+    if (!notificationsAvailable) {
+      // Notifications not available in Expo Go
+      return;
+    }
+    
     if (Platform.OS === 'android' || Platform.OS === 'ios') {
-      const { status } = await Notifications.requestPermissionsAsync();
-      if (status !== 'granted') {
-        Alert.alert('Permission Required', 'Enable notifications to receive treatment reminders.');
+      try {
+        const { status } = await Notifications.requestPermissionsAsync();
+        if (status !== 'granted') {
+          Alert.alert('Permission Required', 'Enable notifications to receive treatment reminders.');
+        }
+      } catch (error) {
+        console.warn('Failed to request notification permissions:', error);
       }
     }
   };
@@ -75,6 +98,11 @@ export default function TreatmentsScreen() {
   };
 
   const scheduleNotification = async (treatment: Treatment) => {
+    if (!notificationsAvailable) {
+      console.log('Notifications not available - reminder not scheduled');
+      return;
+    }
+    
     if (!treatment.reminderEnabled || !treatment.reminderTime) return;
 
     try {
@@ -123,8 +151,12 @@ export default function TreatmentsScreen() {
 
     // Schedule notification if enabled
     if (reminderEnabled) {
-      await scheduleNotification(newTreatment);
-      Alert.alert('Success', 'Treatment added and reminder scheduled!');
+      if (notificationsAvailable) {
+        await scheduleNotification(newTreatment);
+        Alert.alert('Success', 'Treatment added and reminder scheduled!');
+      } else {
+        Alert.alert('Success', 'Treatment added! (Reminders not available in Expo Go)');
+      }
     } else {
       Alert.alert('Success', 'Treatment added successfully!');
     }
@@ -155,10 +187,16 @@ export default function TreatmentsScreen() {
             setTreatments(updatedTreatments);
             
             // Cancel notification
-            const notifications = await Notifications.getAllScheduledNotificationsAsync();
-            for (const notification of notifications) {
-              if (notification.content.data?.treatmentId === treatmentId) {
-                await Notifications.cancelScheduledNotificationAsync(notification.identifier);
+            if (notificationsAvailable) {
+              try {
+                const notifications = await Notifications.getAllScheduledNotificationsAsync();
+                for (const notification of notifications) {
+                  if (notification.content.data?.treatmentId === treatmentId) {
+                    await Notifications.cancelScheduledNotificationAsync(notification.identifier);
+                  }
+                }
+              } catch (error) {
+                console.warn('Failed to cancel notification:', error);
               }
             }
           },

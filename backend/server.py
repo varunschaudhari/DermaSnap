@@ -9,14 +9,30 @@ from pydantic import BaseModel, Field
 from typing import List, Optional, Dict, Any
 from datetime import datetime
 from bson import ObjectId
+from ml_service import get_medgemma_service
 
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
 
+# Configure logging early
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+)
+logger = logging.getLogger(__name__)
+
 # MongoDB connection
-mongo_url = os.environ['MONGO_URL']
+mongo_url = os.environ.get('MONGO_URL')
+db_name = os.environ.get('DB_NAME', 'dermasnap')
+
+if not mongo_url:
+    logger.warning("MONGO_URL not found in environment variables.")
+    logger.warning("Using default MongoDB connection: mongodb://localhost:27017")
+    logger.warning("To set custom MongoDB URL, add MONGO_URL to backend/.env file")
+    mongo_url = "mongodb://localhost:27017"
+
 client = AsyncIOMotorClient(mongo_url)
-db = client[os.environ['DB_NAME']]
+db = client[db_name]
 
 # Create the main app without a prefix
 app = FastAPI()
@@ -81,26 +97,34 @@ class ScanResponse(BaseModel):
     wrinkles: Optional[Dict[str, Any]] = None
 
 # Routes
-@api_router.get("/")
+@app.get("/")
 async def root():
+    """Root endpoint"""
     return {"message": "DermaSnap API", "version": "1.0.0", "status": "healthy"}
+
+@api_router.get("/health")
+async def health():
+    """Health check endpoint"""
+    return {"status": "healthy", "service": "DermaSnap API"}
 
 @api_router.post("/scans", response_model=Dict[str, str])
 async def create_scan(scan: ScanData):
     """
-    Save a new skin scan analysis
+    Save a new skin scan analysis with image stored in database
+    Images are stored as base64 in MongoDB (consider GridFS for production with large images)
     """
     try:
         scan_dict = scan.dict()
-        # Remove base64 image before storing (to save space - optional)
-        scan_dict_to_store = scan_dict.copy()
-        # Keep imageBase64 if you want full data backup
+        # Store everything including imageBase64 in database
+        # For production, consider using GridFS or cloud storage (S3) for large images
+        # For now, base64 in MongoDB works for moderate image sizes
         
-        result = await db.scans.insert_one(scan_dict_to_store)
+        result = await db.scans.insert_one(scan_dict)
+        logger.info(f"Scan saved with ID: {result.inserted_id}")
         return {"id": str(result.inserted_id), "message": "Scan saved successfully"}
     except Exception as e:
-        logging.error(f"Error saving scan: {e}")
-        raise HTTPException(status_code=500, detail="Failed to save scan")
+        logger.error(f"Error saving scan: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Failed to save scan: {str(e)}")
 
 @api_router.get("/scans", response_model=List[Dict[str, Any]])
 async def get_scans(limit: int = 50, skip: int = 0):
@@ -185,7 +209,123 @@ async def get_scan_statistics():
         logging.error(f"Error getting statistics: {e}")
         raise HTTPException(status_code=500, detail="Failed to get statistics")
 
-# Include the router in the main app
+@api_router.post("/analyze/ml")
+async def analyze_with_ml(data: Dict[str, Any]):
+    """
+    Analyze skin image using MedGemma ML model
+    Accepts: { imageBase64: str, analysisType: str, timestamp?: str }
+    """
+    try:
+        image_base64 = data.get("imageBase64")
+        analysis_type = data.get("analysisType", "full")
+        timestamp = data.get("timestamp", datetime.now().isoformat())
+        
+        if not image_base64:
+            raise HTTPException(status_code=400, detail="imageBase64 is required")
+        
+        medgemma = get_medgemma_service()
+        
+        # Check if MedGemma is available
+        if not medgemma.is_available():
+            try:
+                medgemma.load_model()
+            except Exception as e:
+                logging.warning(f"MedGemma not available, will use rule-based: {e}")
+                raise HTTPException(
+                    status_code=503,
+                    detail="ML analysis not available. Please use rule-based analysis."
+                )
+        
+        # Analyze with MedGemma
+        result = medgemma.analyze_skin_image(
+            image_base64,
+            analysis_type
+        )
+        
+        if not result.get("success"):
+            raise HTTPException(
+                status_code=500,
+                detail=result.get("error", "ML analysis failed")
+            )
+        
+        return {
+            "id": "ml_analysis",
+            "ml_analysis": result.get("parsed", {}),
+            "analysis": result.get("analysis", ""),
+            "model": result.get("model", "medgemma-4b-it"),
+            "confidence": result.get("confidence", "medium"),
+            "method": result.get("method", "ml"),
+            "timestamp": timestamp,
+            "analysisType": analysis_type
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"ML analysis error: {e}", exc_info=True)
+        # Provide more helpful error messages
+        error_detail = str(e)
+        if "timeout" in error_detail.lower() or "timed out" in error_detail.lower():
+            error_detail = "ML analysis timed out. The model may be loading. Please try again in a moment."
+        elif "cuda" in error_detail.lower() or "gpu" in error_detail.lower():
+            error_detail = "GPU error. Falling back to CPU processing."
+        elif "memory" in error_detail.lower() or "out of memory" in error_detail.lower():
+            error_detail = "Insufficient memory for ML analysis. Try with a smaller image."
+        
+        raise HTTPException(
+            status_code=500,
+            detail=f"ML analysis failed: {error_detail}"
+        )
+
+@api_router.post("/extract-pixels")
+async def extract_pixels(data: Dict[str, Any]):
+    """
+    Extract pixel data from base64 image for rule-based analysis
+    Accepts: { imageBase64: str, width: int, height: int }
+    Returns: { pixels: List[int] } - RGBA pixel array
+    """
+    try:
+        from PIL import Image
+        import base64
+        from io import BytesIO
+        import numpy as np
+        
+        image_base64 = data.get("imageBase64")
+        width = data.get("width", 800)
+        height = data.get("height", 600)
+        
+        if not image_base64:
+            raise HTTPException(status_code=400, detail="imageBase64 is required")
+        
+        # Decode base64 image
+        image_data = base64.b64decode(image_base64)
+        image = Image.open(BytesIO(image_data)).convert("RGB")
+        
+        # Resize if needed
+        if image.size != (width, height):
+            image = image.resize((width, height), Image.Resampling.LANCZOS)
+        
+        # Convert to numpy array and extract pixels
+        img_array = np.array(image)
+        pixels = img_array.flatten().tolist()
+        
+        # Convert to RGBA format (add alpha channel)
+        rgba_pixels = []
+        for i in range(0, len(pixels), 3):
+            rgba_pixels.extend([pixels[i], pixels[i+1], pixels[i+2], 255])
+        
+        return {
+            "pixels": rgba_pixels,
+            "width": width,
+            "height": height,
+            "format": "RGBA"
+        }
+        
+    except Exception as e:
+        logger.error(f"Pixel extraction error: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Pixel extraction failed: {str(e)}")
+
+# Include the router in the main app (must be after all route definitions)
 app.include_router(api_router)
 
 app.add_middleware(
@@ -196,12 +336,23 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Configure logging
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-)
-logger = logging.getLogger(__name__)
+@app.on_event("startup")
+async def startup_event():
+    """Initialize services on startup"""
+    logger.info("Application startup - pre-loading MedGemma model...")
+    # Pre-load MedGemma for faster first request
+    # Trade-off: Slower startup (~30-60s) but much faster first ML request
+    try:
+        medgemma = get_medgemma_service()
+        if not medgemma.is_available():
+            logger.info("Loading MedGemma model (this may take 30-60 seconds)...")
+            medgemma.load_model()
+            logger.info("✅ MedGemma model pre-loaded successfully")
+        else:
+            logger.info("MedGemma model already loaded")
+    except Exception as e:
+        logger.warning(f"Could not pre-load MedGemma: {e}")
+        logger.warning("Model will load on first request (slower first call)")
 
 @app.on_event("shutdown")
 async def shutdown_db_client():
