@@ -110,17 +110,10 @@ Complete step-by-step guide to deploy DermaSnap backend to production (free tier
    - **Name**: `dermasnap-backend` (or your choice)
    - **Region**: Choose closest to you
    - **Branch**: `main` (or your default branch)
-   - **Root Directory**: `backend` ⚠️ **CRITICAL**: Set this to `backend`!
-     - This tells Render to run commands from the `backend/` folder
-     - Without this, Render will look for files in the repo root and fail
-     - Only changes in `backend/` will trigger auto-deploy
+   - **Root Directory**: `backend` ⚠️ **IMPORTANT**: Set this!
    - **Runtime**: `Python 3`
    - **Build Command**: `pip install -r requirements.txt`
-   - **Start Command**: `uvicorn server:app --host 0.0.0.0 --port $PORT` ⚠️ **IMPORTANT**
-     - `uvicorn` = ASGI server for FastAPI
-     - `server:app` = your `server.py` file and `app` variable
-     - `--host 0.0.0.0` = accept connections from anywhere (required for Render)
-     - `--port $PORT` = use Render's assigned port (don't hardcode!)
+   - **Start Command**: `uvicorn server:app --host 0.0.0.0 --port $PORT`
    - **Plan**: **Free** (or upgrade later)
 
 4. **Set Environment Variables**

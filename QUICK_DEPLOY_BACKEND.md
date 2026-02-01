@@ -16,13 +16,9 @@
 1. Go to [Render](https://render.com) → Sign up with GitHub
 2. **New** → **Web Service** → Connect GitHub repo
 3. **Settings**:
-   - **Root Directory**: `backend` ⚠️ **CRITICAL - MUST SET THIS!**
-     - This tells Render to use the `backend/` folder as the working directory
-     - Without this, deployment will fail (can't find `server.py`, `requirements.txt`, etc.)
+   - **Root Directory**: `backend` ⚠️ IMPORTANT!
    - **Build Command**: `pip install -r requirements.txt`
-   - **Start Command**: `uvicorn server:app --host 0.0.0.0 --port $PORT` ⚠️ **IMPORTANT**
-     - `$PORT` is auto-set by Render (don't use a hardcoded number!)
-     - `--host 0.0.0.0` is required for Render to route traffic
+   - **Start Command**: `uvicorn server:app --host 0.0.0.0 --port $PORT`
    - **Plan**: Free
 4. **Environment Variables**:
    ```
