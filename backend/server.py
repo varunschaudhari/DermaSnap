@@ -339,20 +339,14 @@ app.add_middleware(
 @app.on_event("startup")
 async def startup_event():
     """Initialize services on startup"""
-    logger.info("Application startup - pre-loading MedGemma model...")
-    # Pre-load MedGemma for faster first request
-    # Trade-off: Slower startup (~30-60s) but much faster first ML request
-    try:
-        medgemma = get_medgemma_service()
-        if not medgemma.is_available():
-            logger.info("Loading MedGemma model (this may take 30-60 seconds)...")
-            medgemma.load_model()
-            logger.info("✅ MedGemma model pre-loaded successfully")
-        else:
-            logger.info("MedGemma model already loaded")
-    except Exception as e:
-        logger.warning(f"Could not pre-load MedGemma: {e}")
-        logger.warning("Model will load on first request (slower first call)")
+    logger.info("Application startup...")
+    # NOTE: MedGemma pre-loading disabled for free tier (512MB RAM limit)
+    # MedGemma model is ~8GB, too large for free tier
+    # App will use rule-based analysis instead (works perfectly!)
+    # ML model can be loaded on-demand if sufficient memory is available
+    logger.info("✅ Application started successfully")
+    logger.info("ℹ️  MedGemma ML model disabled (requires >512MB RAM)")
+    logger.info("ℹ️  Using rule-based analysis (works great for free tier!)")
 
 @app.on_event("shutdown")
 async def shutdown_db_client():
