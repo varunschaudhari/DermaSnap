@@ -33,7 +33,8 @@ class MedGemmaService:
         self.loaded = False
         self.device = "cuda" if torch.cuda.is_available() else "cpu"
         self.use_inference_api = True  # Use HF Inference API by default (works on free tier)
-        self.hf_api_url = f"https://api-inference.huggingface.co/models/{self.model_id}"
+        # Updated to use new router API (old api-inference.huggingface.co is deprecated)
+        self.hf_api_url = f"https://router.huggingface.co/models/{self.model_id}"
         self.hf_token = os.environ.get('HUGGING_FACE_HUB_TOKEN') or os.environ.get('HF_TOKEN')
         if self.hf_token:
             logger.info("✅ Hugging Face token found - will use Inference API (works on free tier)")
@@ -394,40 +395,18 @@ class MedGemmaService:
             
             prompt = prompts.get(analysis_type, prompts["full"])
             
-            # Prepare messages for MedGemma (same format as self-hosted)
-            messages = [
-                {
-                    "role": "system",
-                    "content": [{
-                        "type": "text", 
-                        "text": (
-                            "You are an expert dermatologist. Provide detailed, quantitative analysis "
-                            "of skin conditions. Always provide exact numbers and metrics when possible. "
-                            "Use structured format with clear labels for each metric."
-                        )
-                    }]
-                },
-                {
-                    "role": "user",
-                    "content": [
-                        {"type": "text", "text": prompt},
-                        {"type": "image", "image": image}
-                    ]
-                }
-            ]
-            
-            # Call Hugging Face Inference API
+            # Call Hugging Face Router API
             headers = {
                 "Authorization": f"Bearer {self.hf_token}",
                 "Content-Type": "application/json"
             }
             
-            # Prepare request body for HF Inference API
-            # Note: HF API format may vary - this is the standard format
+            # Prepare request body for HF Router API
+            # Router API accepts inputs format with text and image (base64)
             payload = {
                 "inputs": {
                     "text": prompt,
-                    "image": base64_data
+                    "image": base64_data  # Use base64 string directly
                 },
                 "parameters": {
                     "max_new_tokens": 500,
