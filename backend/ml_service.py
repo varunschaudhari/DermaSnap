@@ -414,7 +414,7 @@ class MedGemmaService:
                 }
             }
             
-            logger.info("Calling Hugging Face Inference API...")
+            logger.info(f"Calling Hugging Face Router API: {self.hf_api_url}")
             response = requests.post(
                 self.hf_api_url,
                 headers=headers,
