@@ -1,6 +1,7 @@
 """
 MedGemma ML Service for Skin Analysis
 Handles loading and using Google's MedGemma model for dermatology image analysis
+Uses Hugging Face Inference API (works on free tier) with fallback to self-hosted model
 """
 
 from transformers import AutoProcessor, AutoModelForImageTextToText
@@ -10,6 +11,7 @@ import base64
 from io import BytesIO
 import logging
 import os
+import requests
 from typing import Dict, Any, Optional
 from dotenv import load_dotenv
 from pathlib import Path
@@ -30,6 +32,13 @@ class MedGemmaService:
         self.processor = None
         self.loaded = False
         self.device = "cuda" if torch.cuda.is_available() else "cpu"
+        self.use_inference_api = True  # Use HF Inference API by default (works on free tier)
+        self.hf_api_url = f"https://api-inference.huggingface.co/models/{self.model_id}"
+        self.hf_token = os.environ.get('HUGGING_FACE_HUB_TOKEN') or os.environ.get('HF_TOKEN')
+        if self.hf_token:
+            logger.info("✅ Hugging Face token found - will use Inference API (works on free tier)")
+        else:
+            logger.warning("⚠️ No Hugging Face token - ML analysis will require self-hosted model (needs 8-16GB RAM)")
         
     def load_model(self):
         """Load MedGemma model (call once on startup)"""
@@ -91,8 +100,9 @@ class MedGemmaService:
             raise
     
     def is_available(self) -> bool:
-        """Check if MedGemma is available and loaded"""
-        return self.loaded and self.model is not None and self.processor is not None
+        """Check if MedGemma is available (via API or loaded model)"""
+        # Available if we have HF token (for API) or model is loaded (for self-hosted)
+        return (self.hf_token is not None) or (self.loaded and self.model is not None and self.processor is not None)
     
     def analyze_skin_image(
         self, 
@@ -101,6 +111,7 @@ class MedGemmaService:
     ) -> Dict[str, Any]:
         """
         Analyze skin image using MedGemma
+        Tries Hugging Face Inference API first (works on free tier), falls back to self-hosted model
         
         Args:
             image_base64: Base64 encoded image (with or without data URL prefix)
@@ -109,6 +120,15 @@ class MedGemmaService:
         Returns:
             Dictionary with analysis results
         """
+        # Try Hugging Face Inference API first (works on free tier, no RAM needed)
+        if self.use_inference_api and self.hf_token:
+            result = self._analyze_with_inference_api(image_base64, analysis_type)
+            if result.get("success"):
+                return result
+            else:
+                logger.warning(f"HF Inference API failed: {result.get('error')}, trying self-hosted...")
+        
+        # Fallback to self-hosted model (if available and sufficient RAM)
         if not self.loaded:
             try:
                 self.load_model()
@@ -116,7 +136,7 @@ class MedGemmaService:
                 logger.error(f"Failed to load model: {e}")
                 return {
                     "success": False,
-                    "error": "MedGemma model not available",
+                    "error": "MedGemma model not available. Please set HUGGING_FACE_HUB_TOKEN for API access.",
                     "fallback": True
                 }
         
@@ -310,6 +330,185 @@ class MedGemmaService:
             logger.warning(f"Error parsing MedGemma response: {e}")
         
         return parsed
+    
+    def _analyze_with_inference_api(
+        self, 
+        image_base64: str, 
+        analysis_type: str = "full"
+    ) -> Dict[str, Any]:
+        """
+        Analyze skin image using Hugging Face Inference API
+        This works on free tier (no RAM needed, model hosted by HF)
+        """
+        try:
+            # Clean base64 string
+            base64_data = image_base64
+            if "," in image_base64:
+                base64_data = image_base64.split(",")[-1]
+            
+            # Decode image to verify it's valid
+            image_data = base64.b64decode(base64_data)
+            image = Image.open(BytesIO(image_data))
+            if image.mode != "RGB":
+                image = image.convert("RGB")
+            
+            # Create prompt (same as self-hosted version)
+            prompts = {
+                "acne": (
+                    "Analyze this skin image specifically for acne. "
+                    "Identify and count all types of lesions: comedones (blackheads/whiteheads), "
+                    "pustules (with pus), papules (without pus), and nodules (large/deep). "
+                    "Provide: 1) Total lesion count, 2) Count by type, 3) Lesion density per cm², "
+                    "4) Inflammatory percentage, 5) Redness index, 6) Pore count and density, "
+                    "7) Overall severity (Mild/Moderate/Severe). "
+                    "Format your response as structured data with exact numbers."
+                ),
+                "pigmentation": (
+                    "Analyze this skin image specifically for pigmentation issues. "
+                    "Identify dark spots, hyperpigmentation, and uneven skin tone. "
+                    "Provide: 1) Pigmented area percentage, 2) Average intensity difference, "
+                    "3) Skin Hyperpigmentation Index (SHI), 4) Spot count, 5) Spot density per cm², "
+                    "6) Overall severity (Mild/Moderate/Severe). "
+                    "Format your response as structured data with exact numbers."
+                ),
+                "wrinkles": (
+                    "Analyze this skin image specifically for wrinkles and fine lines. "
+                    "Identify all visible lines and measure their characteristics. "
+                    "Provide: 1) Total wrinkle count, 2) Wrinkles per cm², "
+                    "3) Average length in mm, 4) Average depth (intensity), "
+                    "5) Density percentage, 6) Overall severity (Mild/Moderate/Severe). "
+                    "Format your response as structured data with exact numbers."
+                ),
+                "full": (
+                    "Perform a comprehensive skin analysis covering acne, pigmentation, and wrinkles. "
+                    "For ACNE: Provide total lesion count, count by type (comedones, pustules, papules, nodules), "
+                    "lesion density per cm², inflammatory percentage, redness index, pore count and density, "
+                    "and severity (Mild/Moderate/Severe). "
+                    "For PIGMENTATION: Provide pigmented area percentage, average intensity difference, "
+                    "SHI score, spot count, spot density, and severity. "
+                    "For WRINKLES: Provide total count, count per cm², average length, average depth, "
+                    "density percentage, and severity. "
+                    "Format your response as structured JSON-like data with exact numbers for each condition."
+                )
+            }
+            
+            prompt = prompts.get(analysis_type, prompts["full"])
+            
+            # Prepare messages for MedGemma (same format as self-hosted)
+            messages = [
+                {
+                    "role": "system",
+                    "content": [{
+                        "type": "text", 
+                        "text": (
+                            "You are an expert dermatologist. Provide detailed, quantitative analysis "
+                            "of skin conditions. Always provide exact numbers and metrics when possible. "
+                            "Use structured format with clear labels for each metric."
+                        )
+                    }]
+                },
+                {
+                    "role": "user",
+                    "content": [
+                        {"type": "text", "text": prompt},
+                        {"type": "image", "image": image}
+                    ]
+                }
+            ]
+            
+            # Call Hugging Face Inference API
+            headers = {
+                "Authorization": f"Bearer {self.hf_token}",
+                "Content-Type": "application/json"
+            }
+            
+            # Prepare request body for HF Inference API
+            # Note: HF API format may vary - this is the standard format
+            payload = {
+                "inputs": {
+                    "text": prompt,
+                    "image": base64_data
+                },
+                "parameters": {
+                    "max_new_tokens": 500,
+                    "temperature": 0.1
+                }
+            }
+            
+            logger.info("Calling Hugging Face Inference API...")
+            response = requests.post(
+                self.hf_api_url,
+                headers=headers,
+                json=payload,
+                timeout=60  # 60 second timeout
+            )
+            
+            if response.status_code == 503:
+                # Model is loading, wait and retry
+                logger.warning("Model is loading, waiting 10 seconds...")
+                import time
+                time.sleep(10)
+                response = requests.post(
+                    self.hf_api_url,
+                    headers=headers,
+                    json=payload,
+                    timeout=60
+                )
+            
+            if response.status_code != 200:
+                error_text = response.text
+                logger.error(f"HF API error {response.status_code}: {error_text}")
+                return {
+                    "success": False,
+                    "error": f"HF API error: {error_text}",
+                    "fallback": True
+                }
+            
+            # Parse response
+            result_data = response.json()
+            
+            # Extract generated text (format may vary)
+            if isinstance(result_data, list) and len(result_data) > 0:
+                generated_text = result_data[0].get("generated_text", "")
+            elif isinstance(result_data, dict):
+                generated_text = result_data.get("generated_text", result_data.get("text", ""))
+            else:
+                generated_text = str(result_data)
+            
+            if not generated_text:
+                return {
+                    "success": False,
+                    "error": "No response from HF API",
+                    "fallback": True
+                }
+            
+            # Parse the response (reuse existing parser)
+            parsed_data = self._parse_medgemma_response(generated_text, analysis_type)
+            
+            logger.info("✅ HF Inference API analysis successful")
+            return {
+                "success": True,
+                "analysis": generated_text,
+                "parsed": parsed_data,
+                "model": "medgemma-4b-it",
+                "confidence": "high",
+                "method": "ml-hf"  # Mark as HF Inference API
+            }
+            
+        except requests.exceptions.Timeout:
+            logger.error("HF API request timed out")
+            return {
+                "success": False,
+                "error": "Request timed out. Please try again.",
+                "fallback": True
+            }
+        except Exception as e:
+            logger.error(f"Error calling HF Inference API: {e}")
+            return {
+                "success": False,
+                "error": str(e),
+                "fallback": True
+            }
 
 
 # Global instance (singleton pattern)

@@ -225,16 +225,16 @@ async def analyze_with_ml(data: Dict[str, Any]):
         
         medgemma = get_medgemma_service()
         
-        # Check if MedGemma is available
+        # Check if MedGemma is available (via API or self-hosted)
         if not medgemma.is_available():
-            try:
-                medgemma.load_model()
-            except Exception as e:
-                logging.warning(f"MedGemma not available, will use rule-based: {e}")
+            # Try to use HF Inference API (works on free tier, just needs token)
+            if not medgemma.hf_token:
+                logging.warning("MedGemma not available: HUGGING_FACE_HUB_TOKEN not set")
                 raise HTTPException(
                     status_code=503,
-                    detail="ML analysis not available. Please use rule-based analysis."
+                    detail="ML analysis not available. Please set HUGGING_FACE_HUB_TOKEN environment variable for API access."
                 )
+            # If token exists, it will try API in analyze_skin_image
         
         # Analyze with MedGemma
         result = medgemma.analyze_skin_image(
