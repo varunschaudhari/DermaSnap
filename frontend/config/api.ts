@@ -40,7 +40,6 @@ export const checkBackendHealth = async (): Promise<boolean> => {
   try {
     const response = await fetch(API_ENDPOINTS.health, {
       method: 'GET',
-      timeout: 5000,
     });
     return response.ok;
   } catch (error) {
