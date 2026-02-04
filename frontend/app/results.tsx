@@ -5,6 +5,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { getRecommendations } from '../utils/imageAnalysis';
+import Svg, { Circle, Text as SvgText } from 'react-native-svg';
 
 interface ScanData {
   _id?: string;
@@ -152,8 +153,12 @@ export default function ResultsScreen() {
 
   const renderAcneResults = () => {
     if (!results.acne) return null;
-    const { metrics, severity } = results.acne;
+    const { metrics, severity, lesionAnalysis } = results.acne;
     const recommendations = getRecommendations(severity, 'acne');
+
+    // Use lesion-based metrics if available, otherwise fall back to legacy metrics
+    const lesionMetrics = lesionAnalysis?.metrics || metrics;
+    const hasLesionAnalysis = !!lesionAnalysis;
 
     return (
       <View style={styles.tabContent}>
@@ -166,19 +171,62 @@ export default function ResultsScreen() {
         >
           <Ionicons name="medical" size={24} color="#FFFFFF" />
           <Text style={styles.severityText}>{severity} Acne</Text>
+          {hasLesionAnalysis && (
+            <View style={styles.methodBadge}>
+              <Text style={styles.methodText}>Lesion-Based Analysis</Text>
+            </View>
+          )}
         </LinearGradient>
+
+        {/* Lesion Summary */}
+        {hasLesionAnalysis && lesionAnalysis.lesions && (
+          <View style={styles.summaryCard}>
+            <Text style={styles.summaryTitle}>Lesion Summary</Text>
+            <Text style={styles.summaryText}>
+              {lesionMetrics.totalCount} total lesions detected
+              {lesionMetrics.comedones > 0 && ` • ${lesionMetrics.comedones} comedones`}
+              {lesionMetrics.whiteheads > 0 && ` • ${lesionMetrics.whiteheads} whiteheads`}
+              {lesionMetrics.blackheads > 0 && ` • ${lesionMetrics.blackheads} blackheads`}
+              {lesionMetrics.papules > 0 && ` • ${lesionMetrics.papules} papules`}
+              {lesionMetrics.pustules > 0 && ` • ${lesionMetrics.pustules} pustules`}
+              {lesionMetrics.nodules > 0 && ` • ${lesionMetrics.nodules} nodules`}
+            </Text>
+            <Text style={styles.summarySubtext}>
+              {lesionMetrics.inflammatoryPercent}% inflammatory • {lesionMetrics.averageDensity} lesions/cm²
+            </Text>
+          </View>
+        )}
 
         {/* Metrics Grid */}
         <View style={styles.metricsGrid}>
-          {renderMetricCard('Total Lesions', metrics.totalCount)}
-          {renderMetricCard('Density', metrics.density, '/cm²')}
-          {renderMetricCard('Comedones', metrics.comedones)}
-          {renderMetricCard('Pustules', metrics.pustules)}
-          {renderMetricCard('Papules', metrics.papules)}
-          {renderMetricCard('Nodules', metrics.nodules)}
-          {renderMetricCard('Inflammation', metrics.inflammatoryPercent, '%')}
-          {renderMetricCard('Redness', metrics.rednessPercent, '%')}
+          {renderMetricCard('Total Lesions', lesionMetrics.totalCount || metrics.totalCount)}
+          {renderMetricCard('Density', hasLesionAnalysis ? lesionMetrics.averageDensity : metrics.density, '/cm²')}
+          {renderMetricCard('Comedones', lesionMetrics.comedones || metrics.comedones)}
+          {hasLesionAnalysis && renderMetricCard('Whiteheads', lesionMetrics.whiteheads || 0)}
+          {hasLesionAnalysis && renderMetricCard('Blackheads', lesionMetrics.blackheads || 0)}
+          {renderMetricCard('Pustules', lesionMetrics.pustules || metrics.pustules)}
+          {renderMetricCard('Papules', lesionMetrics.papules || metrics.papules)}
+          {renderMetricCard('Nodules', lesionMetrics.nodules || metrics.nodules)}
+          {renderMetricCard('Inflammation', hasLesionAnalysis ? lesionMetrics.inflammatoryPercent : metrics.inflammatoryPercent, '%')}
+          {renderMetricCard('Redness', hasLesionAnalysis ? lesionMetrics.averageRednessPercent : metrics.rednessPercent, '%')}
         </View>
+
+        {/* ROI Density Information */}
+        {hasLesionAnalysis && lesionAnalysis.rois && lesionAnalysis.rois.length > 0 && (
+          <View style={styles.roiCard}>
+            <Text style={styles.roiTitle}>Density by Region</Text>
+            {lesionAnalysis.rois.map((roi, index) => (
+              <View key={index} style={styles.roiItem}>
+                <Text style={styles.roiLabel}>
+                  {roi.name.replace('_', ' ').replace(/\b\w/g, l => l.toUpperCase())}
+                </Text>
+                <Text style={styles.roiValue}>
+                  {roi.lesions.length} lesions • {roi.density.toFixed(1)}/cm²
+                </Text>
+              </View>
+            ))}
+          </View>
+        )}
 
         {/* Recommendations */}
         <View style={styles.recommendationsCard}>
@@ -320,13 +368,91 @@ export default function ResultsScreen() {
         </TouchableOpacity>
       </LinearGradient>
 
-      {/* Captured Image */}
+      {/* Captured Image with Lesion Map Overlay */}
       {results.imageBase64 && (
         <View style={styles.imageContainer}>
           <Image
             source={{ uri: `data:image/jpeg;base64,${results.imageBase64}` }}
             style={styles.image}
+            resizeMode="contain"
           />
+          {/* Lesion Map Overlay */}
+          {results.acne?.lesionAnalysis?.visualMap && (() => {
+            const imageWidth = results.acne.lesionAnalysis.visualMap.imageWidth;
+            const imageHeight = results.acne.lesionAnalysis.visualMap.imageHeight;
+            const displayWidth = width;
+            const displayHeight = 200; // Match imageContainer height
+            
+            // Calculate scaling to maintain aspect ratio
+            const imageAspect = imageWidth / imageHeight;
+            const displayAspect = displayWidth / displayHeight;
+            
+            let scaledWidth = displayWidth;
+            let scaledHeight = displayHeight;
+            let offsetX = 0;
+            let offsetY = 0;
+            
+            if (imageAspect > displayAspect) {
+              // Image is wider - fit to width
+              scaledHeight = displayWidth / imageAspect;
+              offsetY = (displayHeight - scaledHeight) / 2;
+            } else {
+              // Image is taller - fit to height
+              scaledWidth = displayHeight * imageAspect;
+              offsetX = (displayWidth - scaledWidth) / 2;
+            }
+            
+            const scaleX = scaledWidth / imageWidth;
+            const scaleY = scaledHeight / imageHeight;
+            
+            return (
+              <View style={styles.lesionOverlay} pointerEvents="none">
+                <Svg width={displayWidth} height={displayHeight}>
+                  {results.acne.lesionAnalysis.visualMap.lesions.map((lesion: any) => {
+                    const x = lesion.x * scaleX + offsetX;
+                    const y = lesion.y * scaleY + offsetY;
+                    
+                    return (
+                      <Circle
+                        key={lesion.id}
+                        cx={x}
+                        cy={y}
+                        r={5}
+                        fill={lesion.color}
+                        stroke="#FFFFFF"
+                        strokeWidth={1.5}
+                        opacity={0.85}
+                      />
+                    );
+                  })}
+                </Svg>
+              </View>
+            );
+          })()}
+          {/* Legend */}
+          {results.acne?.lesionAnalysis?.visualMap && (
+            <View style={styles.legend}>
+              <Text style={styles.legendTitle}>Lesion Types</Text>
+              <View style={styles.legendItems}>
+                <View style={styles.legendItem}>
+                  <View style={[styles.legendDot, { backgroundColor: '#E74C3C' }]} />
+                  <Text style={styles.legendText}>Pustule</Text>
+                </View>
+                <View style={styles.legendItem}>
+                  <View style={[styles.legendDot, { backgroundColor: '#E67E22' }]} />
+                  <Text style={styles.legendText}>Papule</Text>
+                </View>
+                <View style={styles.legendItem}>
+                  <View style={[styles.legendDot, { backgroundColor: '#8E44AD' }]} />
+                  <Text style={styles.legendText}>Nodule</Text>
+                </View>
+                <View style={styles.legendItem}>
+                  <View style={[styles.legendDot, { backgroundColor: '#95A5A6' }]} />
+                  <Text style={styles.legendText}>Comedone</Text>
+                </View>
+              </View>
+            </View>
+          )}
         </View>
       )}
 
@@ -577,6 +703,120 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: '#E65100',
     lineHeight: 18,
+    fontWeight: '500',
+  },
+  methodBadge: {
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 8,
+    marginLeft: 8,
+  },
+  methodText: {
+    fontSize: 11,
+    color: '#FFFFFF',
+    fontWeight: '600',
+  },
+  summaryCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    padding: 16,
+    elevation: 2,
+    shadowColor: '#00B894',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+  },
+  summaryTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#2D3436',
+    marginBottom: 8,
+  },
+  summaryText: {
+    fontSize: 14,
+    color: '#636E72',
+    lineHeight: 20,
+    marginBottom: 4,
+  },
+  summarySubtext: {
+    fontSize: 12,
+    color: '#95A5A6',
+    fontWeight: '500',
+  },
+  roiCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    padding: 16,
+    elevation: 2,
+    shadowColor: '#00B894',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+  },
+  roiTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#2D3436',
+    marginBottom: 12,
+  },
+  roiItem: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: '#E8F8F5',
+  },
+  roiLabel: {
+    fontSize: 14,
+    color: '#636E72',
+    fontWeight: '500',
+    flex: 1,
+  },
+  roiValue: {
+    fontSize: 14,
+    color: '#00B894',
+    fontWeight: '600',
+  },
+  lesionOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+  },
+  legend: {
+    position: 'absolute',
+    bottom: 8,
+    right: 8,
+    backgroundColor: 'rgba(255, 255, 255, 0.95)',
+    borderRadius: 12,
+    padding: 12,
+    maxWidth: 150,
+  },
+  legendTitle: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#2D3436',
+    marginBottom: 8,
+  },
+  legendItems: {
+    gap: 6,
+  },
+  legendItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  legendDot: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+  },
+  legendText: {
+    fontSize: 11,
+    color: '#636E72',
     fontWeight: '500',
   },
 });

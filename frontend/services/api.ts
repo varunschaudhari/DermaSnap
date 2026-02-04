@@ -5,36 +5,6 @@
 
 import { API_ENDPOINTS, API_CONFIG } from '../config/api';
 
-export interface MLAnalysisRequest {
-  imageBase64: string;
-  analysisType: 'acne' | 'pigmentation' | 'wrinkles' | 'full';
-  timestamp?: string;
-}
-
-export interface MLAnalysisResponse {
-  id: string;
-  ml_analysis: {
-    acne?: {
-      totalCount?: number;
-      severity: string;
-    };
-    pigmentation?: {
-      pigmentedPercent?: number;
-      severity: string;
-    };
-    wrinkles?: {
-      count?: number;
-      severity: string;
-    };
-  };
-  analysis: string;
-  model: string;
-  confidence: string;
-  method: string;
-  timestamp: string;
-  analysisType: string;
-}
-
 export interface ScanData {
   imageUri?: string;
   imageBase64?: string;
@@ -59,55 +29,6 @@ const createTimeoutSignal = (timeoutMs: number): AbortSignal => {
   const controller = new AbortController();
   setTimeout(() => controller.abort(), timeoutMs);
   return controller.signal;
-};
-
-/**
- * Analyze image using MedGemma ML model
- */
-export const analyzeWithML = async (
-  request: MLAnalysisRequest,
-  retries: number = API_CONFIG.retries
-): Promise<MLAnalysisResponse> => {
-  for (let attempt = 1; attempt <= retries; attempt++) {
-    try {
-      const response = await fetch(API_ENDPOINTS.analyzeML, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          imageBase64: request.imageBase64,
-          analysisType: request.analysisType,
-          timestamp: request.timestamp || new Date().toISOString(),
-        }),
-        signal: createTimeoutSignal(API_CONFIG.timeout) as any,
-      });
-
-      if (!response.ok) {
-        const errorText = await response.text();
-        throw new Error(`ML analysis failed (${response.status}): ${errorText}`);
-      }
-
-      return await response.json();
-    } catch (error: any) {
-      const isLastAttempt = attempt === retries;
-      const isTimeout = error.name === 'AbortError' || error.message?.includes('timeout');
-      
-      console.warn(`ML analysis attempt ${attempt}/${retries} failed:`, error.message || error);
-      
-      if (isLastAttempt) {
-        throw new Error(
-          `ML analysis failed after ${retries} attempts. ${isTimeout ? 'Request timed out.' : 'Server error.'}`
-        );
-      }
-      
-      // Exponential backoff
-      const delay = Math.min(API_CONFIG.retryDelay * Math.pow(2, attempt - 1), 5000);
-      await new Promise(resolve => setTimeout(resolve, delay));
-    }
-  }
-  
-  throw new Error('ML analysis failed after all retries');
 };
 
 /**

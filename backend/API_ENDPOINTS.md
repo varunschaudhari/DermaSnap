@@ -11,31 +11,33 @@
 - `GET /api/health` - Health check
 - `GET /api/` - API root (same as `/api/health`)
 
-### ML Analysis
-- `POST /api/analyze/ml` - Analyze image with MedGemma ML model
+### YOLO Detection
+- `POST /api/analyze/yolo` - Detect acne lesions using YOLO model
   - **Request Body:**
     ```json
     {
       "imageBase64": "base64_encoded_image_string",
-      "analysisType": "acne" | "pigmentation" | "wrinkles" | "full",
-      "timestamp": "2024-01-01T00:00:00.000Z" (optional)
+      "width": 800,
+      "height": 600,
+      "confidence": 0.3 (optional, default 0.3)
     }
     ```
   - **Response:**
     ```json
     {
-      "id": "ml_analysis",
-      "ml_analysis": {
-        "acne": { "severity": "mild|moderate|severe", ... },
-        "pigmentation": { "severity": "...", ... },
-        "wrinkles": { "severity": "...", ... }
-      },
-      "analysis": "raw text analysis",
-      "model": "medgemma-4b-it",
-      "confidence": "high|medium|low",
-      "method": "ml",
-      "timestamp": "...",
-      "analysisType": "..."
+      "boxes": [
+        {
+          "x": 100.5,
+          "y": 200.3,
+          "width": 50.2,
+          "height": 45.8,
+          "confidence": 0.85,
+          "classId": 1,
+          "class": "papule"
+        }
+      ],
+      "model": "yolov8-nano",
+      "count": 5
     }
     ```
 
@@ -56,10 +58,10 @@ curl http://localhost:8001/api/health
 # Root
 curl http://localhost:8001/
 
-# ML Analysis (example)
-curl -X POST http://localhost:8001/api/analyze/ml \
+# YOLO Detection (example)
+curl -X POST http://localhost:8001/api/analyze/yolo \
   -H "Content-Type: application/json" \
-  -d '{"imageBase64": "base64_string", "analysisType": "full"}'
+  -d '{"imageBase64": "base64_string", "width": 800, "height": 600}'
 ```
 
 ### Using Browser:
@@ -79,5 +81,6 @@ curl -X POST http://localhost:8001/api/analyze/ml \
 - Verify required fields are present
 
 ### `503 Service Unavailable`
-- MedGemma model not loaded
-- Check if model downloaded successfully
+- YOLO model not available
+- Check if ultralytics package is installed
+- Verify model can be loaded (will auto-download on first use)

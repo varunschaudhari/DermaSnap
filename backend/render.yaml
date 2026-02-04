@@ -4,12 +4,11 @@ services:
     env: python
     buildCommand: pip install -r requirements.txt
     startCommand: uvicorn server:app --host 0.0.0.0 --port $PORT
+    #plan: starter  # Recommended: upgrade from free to starter ($7/month)
     envVars:
       - key: MONGO_URL
         sync: false
       - key: DB_NAME
         value: dermasnap
-      - key: HUGGING_FACE_HUB_TOKEN
-        sync: false
       - key: PORT
         value: 8001

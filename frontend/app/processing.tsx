@@ -7,6 +7,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { analyzeAcne, analyzePigmentation, analyzeWrinkles, detectSkinTone, getSeverityLevel } from '../utils/imageAnalysis';
 import { extractPixelsFromBase64, extractPixelsViaBackend } from '../utils/imagePixelExtraction';
+import { analyzeLesions, calibrateImage, type LesionAnalysisResult } from '../utils/lesionAnalysis';
 import { cleanupOldScans } from '../utils/storageCleanup';
 
 interface SaveScanResponse {
@@ -102,109 +103,65 @@ export default function ProcessingScreen() {
         analysisType,
       };
 
-      // Step 3: Try ML analysis first, fallback to rule-based
-      let mlAnalysis: any = null;
-      let useML = false;
-
-      try {
-        // Try MedGemma ML analysis
-        setCurrentStep(2);
-        animateProgress(35);
-        mlAnalysis = await analyzeWithMedGemma(
+      // Step 3: Run lesion-based and rule-based analyses
+      setCurrentStep(2);
+      animateProgress(42);
+      await new Promise(resolve => setTimeout(resolve, 1200));
+      
+      if (analysisType === 'acne' || analysisType === 'full') {
+        // Use lesion-based analysis with YOLO if available
+        const calibration = calibrateImage(pixelData, 800, 600, 'none');
+        const lesionAnalysis = await analyzeLesions(
+          pixelData, 
+          800, 
+          600, 
+          skinTone, 
+          calibration,
           manipResult.base64 || base64,
-          analysisType
+          true // Use YOLO if available
         );
-        useML = true;
-        console.log('✅ MedGemma analysis successful');
-      } catch (error) {
-        console.log('⚠️ MedGemma not available, using rule-based analysis');
-        useML = false;
+        
+        // Also get legacy results for compatibility
+        const acneResults = analyzeAcne(pixelData, 800, 600, skinTone);
+        
+        results.acne = {
+          ...acneResults,
+          // Add comprehensive lesion-based analysis
+          lesionAnalysis: {
+            lesions: lesionAnalysis.lesions,
+            rois: lesionAnalysis.rois,
+            metrics: lesionAnalysis.metrics,
+            visualMap: lesionAnalysis.visualMap,
+          },
+          severity: lesionAnalysis.metrics.severity,
+          method: 'lesion-based',
+        };
       }
 
-      // Step 4: Run analyses based on type
-      if (useML && mlAnalysis) {
-        // Use ML results for severity, combine with rule-based for precise metrics
+      if (analysisType === 'pigmentation' || analysisType === 'full') {
         setCurrentStep(3);
-        animateProgress(50);
-        
-        // Get rule-based results for precise metrics
-        const acneResults = analyzeAcne(pixelData, 800, 600, skinTone);
-        const pigmentationResults = analyzePigmentation(pixelData, 800, 600, skinTone);
-        const wrinklesResults = analyzeWrinkles(pixelData, 800, 600);
-        
-        // Combine: rule-based metrics + ML severity
-        if (analysisType === 'acne' || analysisType === 'full') {
-          const mlAcne = mlAnalysis.parsed?.acne || {};
-          results.acne = {
-            ...acneResults,
-            severity: mlAcne.severity || getSeverityLevel(acneResults.metrics, 'acne'),
-            mlAnalysis: mlAnalysis.analysis,
-            mlConfidence: mlAnalysis.confidence,
-            method: 'hybrid',
-          };
-        }
-
-        if (analysisType === 'pigmentation' || analysisType === 'full') {
-          const mlPig = mlAnalysis.parsed?.pigmentation || {};
-          results.pigmentation = {
-            ...pigmentationResults,
-            severity: mlPig.severity || getSeverityLevel(pigmentationResults.metrics, 'pigmentation'),
-            mlAnalysis: mlAnalysis.analysis,
-            mlConfidence: mlAnalysis.confidence,
-            method: 'hybrid',
-          };
-        }
-
-        if (analysisType === 'wrinkles' || analysisType === 'full') {
-          const mlWrinkles = mlAnalysis.parsed?.wrinkles || {};
-          results.wrinkles = {
-            ...wrinklesResults,
-            severity: mlWrinkles.severity || getSeverityLevel(wrinklesResults.metrics, 'wrinkles'),
-            mlAnalysis: mlAnalysis.analysis,
-            mlConfidence: mlAnalysis.confidence,
-            method: 'hybrid',
-          };
-        }
-      } else {
-        // Fallback to rule-based only
-        setCurrentStep(2);
-        animateProgress(42);
+        animateProgress(57);
         await new Promise(resolve => setTimeout(resolve, 1200));
         
-        if (analysisType === 'acne' || analysisType === 'full') {
-          const acneResults = analyzeAcne(pixelData, 800, 600, skinTone);
-          results.acne = {
-            ...acneResults,
-            severity: getSeverityLevel(acneResults.metrics, 'acne'),
-            method: 'rule-based',
-          };
-        }
+        const pigmentationResults = analyzePigmentation(pixelData, 800, 600, skinTone);
+        results.pigmentation = {
+          ...pigmentationResults,
+          severity: getSeverityLevel(pigmentationResults.metrics, 'pigmentation'),
+          method: 'rule-based',
+        };
+      }
 
-        if (analysisType === 'pigmentation' || analysisType === 'full') {
-          setCurrentStep(3);
-          animateProgress(57);
-          await new Promise(resolve => setTimeout(resolve, 1200));
-          
-          const pigmentationResults = analyzePigmentation(pixelData, 800, 600, skinTone);
-          results.pigmentation = {
-            ...pigmentationResults,
-            severity: getSeverityLevel(pigmentationResults.metrics, 'pigmentation'),
-            method: 'rule-based',
-          };
-        }
-
-        if (analysisType === 'wrinkles' || analysisType === 'full') {
-          setCurrentStep(4);
-          animateProgress(71);
-          await new Promise(resolve => setTimeout(resolve, 1200));
-          
-          const wrinklesResults = analyzeWrinkles(pixelData, 800, 600);
-          results.wrinkles = {
-            ...wrinklesResults,
-            severity: getSeverityLevel(wrinklesResults.metrics, 'wrinkles'),
-            method: 'rule-based',
-          };
-        }
+      if (analysisType === 'wrinkles' || analysisType === 'full') {
+        setCurrentStep(4);
+        animateProgress(71);
+        await new Promise(resolve => setTimeout(resolve, 1200));
+        
+        const wrinklesResults = analyzeWrinkles(pixelData, 800, 600);
+        results.wrinkles = {
+          ...wrinklesResults,
+          severity: getSeverityLevel(wrinklesResults.metrics, 'wrinkles'),
+          method: 'rule-based',
+        };
       }
 
       // Step 6: Calculating metrics
@@ -245,71 +202,6 @@ export default function ProcessingScreen() {
       // Try to go back on error
       router.back();
     }
-  };
-
-  // generateMockPixelData removed - now using extractPixelsFromBase64/extractPixelsViaBackend
-
-  const analyzeWithMedGemma = async (
-    imageBase64: string,
-    analysisType: string,
-    retries: number = 3
-  ): Promise<any> => {
-    const BACKEND_URL = process.env.EXPO_PUBLIC_BACKEND_URL;
-    
-    // Create timeout helper (AbortSignal.timeout not available in React Native)
-    const createTimeoutSignal = (timeoutMs: number): AbortSignal => {
-      const controller = new AbortController();
-      setTimeout(() => controller.abort(), timeoutMs);
-      return controller.signal;
-    };
-    
-    for (let attempt = 1; attempt <= retries; attempt++) {
-      try {
-        const response = await fetch(`${BACKEND_URL}/api/analyze/ml`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            imageBase64,
-            analysisType,
-            timestamp: new Date().toISOString(),
-          }),
-          // Add timeout using AbortController (compatible with React Native)
-          signal: createTimeoutSignal(30000) as any, // 30 second timeout
-        });
-
-        if (!response.ok) {
-          const errorText = await response.text();
-          throw new Error(`ML analysis failed (${response.status}): ${errorText}`);
-        }
-
-        return await response.json();
-      } catch (error: any) {
-        const isLastAttempt = attempt === retries;
-        const isTimeout = error.name === 'TimeoutError' || error.name === 'AbortError';
-        const isNetworkError = error.message?.includes('fetch') || error.message?.includes('network');
-        
-        console.warn(
-          `MedGemma analysis attempt ${attempt}/${retries} failed:`,
-          error.message || error
-        );
-        
-        if (isLastAttempt) {
-          // Final attempt failed - throw to trigger fallback
-          throw new Error(
-            `ML analysis failed after ${retries} attempts. ${isTimeout ? 'Request timed out.' : isNetworkError ? 'Network error.' : 'Server error.'}`
-          );
-        }
-        
-        // Wait before retry (exponential backoff)
-        const delay = Math.min(1000 * Math.pow(2, attempt - 1), 5000);
-        await new Promise(resolve => setTimeout(resolve, delay));
-      }
-    }
-    
-    // Should never reach here, but TypeScript needs it
-    throw new Error('ML analysis failed after all retries');
   };
 
   const saveResults = async (results: any) => {

@@ -16,8 +16,8 @@ export const API_ENDPOINTS = {
   health: `${BACKEND_URL}/api/health`,
   root: `${BACKEND_URL}/`,
   
-  // ML Analysis
-  analyzeML: `${BACKEND_URL}/api/analyze/ml`,
+  // YOLO Detection
+  analyzeYOLO: `${BACKEND_URL}/api/analyze/yolo`,
   
   // Scans
   scans: `${BACKEND_URL}/api/scans`,

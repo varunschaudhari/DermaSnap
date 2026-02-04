@@ -9,7 +9,7 @@ from pydantic import BaseModel, Field
 from typing import List, Optional, Dict, Any
 from datetime import datetime
 from bson import ObjectId
-from ml_service import get_medgemma_service
+from yolo_service import get_yolo_service
 
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
@@ -209,74 +209,6 @@ async def get_scan_statistics():
         logging.error(f"Error getting statistics: {e}")
         raise HTTPException(status_code=500, detail="Failed to get statistics")
 
-@api_router.post("/analyze/ml")
-async def analyze_with_ml(data: Dict[str, Any]):
-    """
-    Analyze skin image using MedGemma ML model
-    Accepts: { imageBase64: str, analysisType: str, timestamp?: str }
-    """
-    try:
-        image_base64 = data.get("imageBase64")
-        analysis_type = data.get("analysisType", "full")
-        timestamp = data.get("timestamp", datetime.now().isoformat())
-        
-        if not image_base64:
-            raise HTTPException(status_code=400, detail="imageBase64 is required")
-        
-        medgemma = get_medgemma_service()
-        
-        # Check if MedGemma is available (via API or self-hosted)
-        if not medgemma.is_available():
-            # Try to use HF Inference API (works on free tier, just needs token)
-            if not medgemma.hf_token:
-                logging.warning("MedGemma not available: HUGGING_FACE_HUB_TOKEN not set")
-                raise HTTPException(
-                    status_code=503,
-                    detail="ML analysis not available. Please set HUGGING_FACE_HUB_TOKEN environment variable for API access."
-                )
-            # If token exists, it will try API in analyze_skin_image
-        
-        # Analyze with MedGemma
-        result = medgemma.analyze_skin_image(
-            image_base64,
-            analysis_type
-        )
-        
-        if not result.get("success"):
-            raise HTTPException(
-                status_code=500,
-                detail=result.get("error", "ML analysis failed")
-            )
-        
-        return {
-            "id": "ml_analysis",
-            "ml_analysis": result.get("parsed", {}),
-            "analysis": result.get("analysis", ""),
-            "model": result.get("model", "medgemma-4b-it"),
-            "confidence": result.get("confidence", "medium"),
-            "method": result.get("method", "ml"),
-            "timestamp": timestamp,
-            "analysisType": analysis_type
-        }
-        
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"ML analysis error: {e}", exc_info=True)
-        # Provide more helpful error messages
-        error_detail = str(e)
-        if "timeout" in error_detail.lower() or "timed out" in error_detail.lower():
-            error_detail = "ML analysis timed out. The model may be loading. Please try again in a moment."
-        elif "cuda" in error_detail.lower() or "gpu" in error_detail.lower():
-            error_detail = "GPU error. Falling back to CPU processing."
-        elif "memory" in error_detail.lower() or "out of memory" in error_detail.lower():
-            error_detail = "Insufficient memory for ML analysis. Try with a smaller image."
-        
-        raise HTTPException(
-            status_code=500,
-            detail=f"ML analysis failed: {error_detail}"
-        )
-
 @api_router.post("/extract-pixels")
 async def extract_pixels(data: Dict[str, Any]):
     """
@@ -325,6 +257,50 @@ async def extract_pixels(data: Dict[str, Any]):
         logger.error(f"Pixel extraction error: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Pixel extraction failed: {str(e)}")
 
+@api_router.post("/analyze/yolo")
+async def analyze_with_yolo(data: Dict[str, Any]):
+    """
+    Detect acne lesions using YOLO model
+    Accepts: { imageBase64: str, width: int, height: int, confidence?: float }
+    Returns: { boxes: List[YOLOBox], model: str, count: int }
+    """
+    try:
+        image_base64 = data.get("imageBase64")
+        width = data.get("width", 800)
+        height = data.get("height", 600)
+        confidence = data.get("confidence", 0.3)
+        
+        if not image_base64:
+            raise HTTPException(status_code=400, detail="imageBase64 is required")
+        
+        yolo_service = get_yolo_service()
+        
+        # Run YOLO detection
+        result = yolo_service.detect_lesions(
+            image_base64,
+            width,
+            height,
+            confidence
+        )
+        
+        if not result.get("success"):
+            raise HTTPException(
+                status_code=503,
+                detail=result.get("error", "YOLO detection failed")
+            )
+        
+        return {
+            "boxes": result.get("boxes", []),
+            "model": result.get("model", "yolov8-nano"),
+            "count": result.get("count", 0),
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"YOLO detection error: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"YOLO detection failed: {str(e)}")
+
 # Include the router in the main app (must be after all route definitions)
 app.include_router(api_router)
 
@@ -340,13 +316,8 @@ app.add_middleware(
 async def startup_event():
     """Initialize services on startup"""
     logger.info("Application startup...")
-    # NOTE: MedGemma pre-loading disabled for free tier (512MB RAM limit)
-    # MedGemma model is ~8GB, too large for free tier
-    # App will use rule-based analysis instead (works perfectly!)
-    # ML model can be loaded on-demand if sufficient memory is available
     logger.info("✅ Application started successfully")
-    logger.info("ℹ️  MedGemma ML model disabled (requires >512MB RAM)")
-    logger.info("ℹ️  Using rule-based analysis (works great for free tier!)")
+    logger.info("ℹ️  Using YOLO + rule-based lesion analysis")
 
 @app.on_event("shutdown")
 async def shutdown_db_client():
