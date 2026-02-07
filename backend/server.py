@@ -41,15 +41,27 @@ connection_kwargs = {
 }
 
 # For MongoDB Atlas (mongodb+srv://), SSL is required and enabled by default
-# For local MongoDB, SSL is not needed
+# Motor automatically handles SSL for mongodb+srv:// connections
+# DO NOT manually add tls=true - it causes SSL handshake errors
 if mongo_url.startswith("mongodb+srv://"):
-    # Ensure SSL is explicitly enabled for Atlas connections
-    # Motor automatically handles SSL for mongodb+srv://, but we can add extra params
-    if "tls=true" not in mongo_url and "ssl=true" not in mongo_url:
-        # Add TLS parameters to connection string if not present
-        separator = "&" if "?" in mongo_url else "?"
-        mongo_url = f"{mongo_url}{separator}tls=true&tlsAllowInvalidCertificates=false"
-    logger.info("Connecting to MongoDB Atlas with SSL/TLS...")
+    # Remove any manual tls/ssl parameters that might conflict
+    if "tls=true" in mongo_url:
+        mongo_url = mongo_url.replace("&tls=true", "").replace("?tls=true", "").replace("tls=true&", "").replace("tls=true", "")
+    if "ssl=true" in mongo_url:
+        mongo_url = mongo_url.replace("&ssl=true", "").replace("?ssl=true", "").replace("ssl=true&", "").replace("ssl=true", "")
+    if "tlsAllowInvalidCertificates" in mongo_url:
+        # Remove tlsAllowInvalidCertificates parameter
+        mongo_url = mongo_url.replace("&tlsAllowInvalidCertificates=false", "").replace("&tlsAllowInvalidCertificates=true", "")
+        mongo_url = mongo_url.replace("?tlsAllowInvalidCertificates=false", "?").replace("?tlsAllowInvalidCertificates=true", "?")
+        mongo_url = mongo_url.replace("tlsAllowInvalidCertificates=false&", "").replace("tlsAllowInvalidCertificates=true&", "")
+    
+    # Ensure connection string has proper format with required parameters
+    if "?" not in mongo_url:
+        mongo_url = f"{mongo_url}?retryWrites=true&w=majority"
+    elif "retryWrites" not in mongo_url:
+        mongo_url = f"{mongo_url}&retryWrites=true&w=majority"
+    
+    logger.info("Connecting to MongoDB Atlas with SSL/TLS (automatic)...")
 else:
     logger.info("Connecting to local MongoDB...")
 
