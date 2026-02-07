@@ -41,10 +41,9 @@ connection_kwargs = {
 }
 
 # For MongoDB Atlas (mongodb+srv://), SSL is required and enabled by default
-# Motor automatically handles SSL for mongodb+srv:// connections
-# DO NOT manually add tls=true - it causes SSL handshake errors
+# On Render, we may need explicit SSL configuration in client kwargs
 if mongo_url.startswith("mongodb+srv://"):
-    # Remove any manual tls/ssl parameters that might conflict
+    # Remove any manual tls/ssl parameters from URL that might conflict
     if "tls=true" in mongo_url:
         mongo_url = mongo_url.replace("&tls=true", "").replace("?tls=true", "").replace("tls=true&", "").replace("tls=true", "")
     if "ssl=true" in mongo_url:
@@ -61,17 +60,33 @@ if mongo_url.startswith("mongodb+srv://"):
     elif "retryWrites" not in mongo_url:
         mongo_url = f"{mongo_url}&retryWrites=true&w=majority"
     
-    logger.info("Connecting to MongoDB Atlas with SSL/TLS (automatic)...")
+    # For mongodb+srv://, Motor handles SSL automatically
+    # Don't add explicit TLS config as it can conflict with automatic handling
+    # Log the connection string (without password) for debugging
+    safe_url = mongo_url.split("@")[-1] if "@" in mongo_url else mongo_url
+    logger.info(f"Connecting to MongoDB Atlas: ...@{safe_url}")
+    logger.info("Using automatic SSL/TLS (mongodb+srv://)...")
 else:
     logger.info("Connecting to local MongoDB...")
 
 try:
+    
     client = AsyncIOMotorClient(mongo_url, **connection_kwargs)
     db = client[db_name]
-    # Test connection
     logger.info(f"✅ MongoDB client initialized for database: {db_name}")
 except Exception as e:
-    logger.error(f"❌ Failed to initialize MongoDB client: {e}")
+    error_msg = str(e)
+    logger.error(f"❌ Failed to initialize MongoDB client: {error_msg}")
+    
+    # Provide helpful debugging information
+    if "SSL" in error_msg or "TLS" in error_msg or "handshake" in error_msg:
+        logger.error("⚠️  SSL/TLS handshake error detected.")
+        logger.error("💡 Troubleshooting steps:")
+        logger.error("   1. Verify MONGO_URL format: mongodb+srv://user:pass@cluster.mongodb.net/db?retryWrites=true&w=majority")
+        logger.error("   2. Check MongoDB Atlas Network Access allows 0.0.0.0/0 (or Render IPs)")
+        logger.error("   3. Verify database user credentials are correct")
+        logger.error("   4. Ensure password is URL-encoded if it contains special characters")
+    
     raise
 
 # Create the main app without a prefix
