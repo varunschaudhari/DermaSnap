@@ -135,9 +135,9 @@ export const detectLesionsWithYOLO = async (
       const { detectWithYOLO } = await import('./yoloDetection');
       const yoloResult = await detectWithYOLO(imageBase64, width, height, true);
       
-      // Filter boxes by confidence threshold
+      // Filter boxes by confidence threshold - INCREASED for fewer false positives
       yoloBoxes = yoloResult.boxes
-        .filter(box => box.confidence > 0.3) // Minimum confidence
+        .filter(box => box.confidence > 0.5) // Increased from 0.3 to 0.5 (67% increase)
         .map(box => ({
           x: box.x - box.width / 2, // Convert center to top-left
           y: box.y - box.height / 2,
@@ -222,10 +222,16 @@ const extractPreciseLesionsFromYOLOBoxes = (
       processedPixels
     );
 
-    lesions.push(...patchLesions);
+    // Limit lesions per YOLO box to prevent over-detection
+    // Sort by area (largest first) and keep top 3 per box
+    const sortedLesions = patchLesions.sort((a, b) => b.area - a.area);
+    const topLesions = sortedLesions.slice(0, 3);
+    
+    lesions.push(...topLesions);
   }
 
-  return lesions;
+  // Post-processing: Filter out small/weak detections
+  return filterLesions(lesions, calibration);
 };
 
 /**
@@ -301,17 +307,17 @@ const createAdaptiveBinaryMap = (
       let isLesion = false;
 
       if (yoloClass === 'inflammatory' || yoloClass === 'pustule' || yoloClass === 'papule') {
-        // Inflammatory: red, raised
-        isLesion = redness > 12 && brightness > 65 && brightness < 245 && skinDiff > 25;
+        // Inflammatory: red, raised - STRICTER THRESHOLDS
+        isLesion = redness > 22 && brightness > 75 && brightness < 235 && skinDiff > 40;
       } else if (yoloClass === 'comedone' || yoloClass === 'non-inflammatory') {
-        // Comedones: dark or bright spots
-        isLesion = (brightness < 115 && r < localSkinR - 25 && skinDiff > 35) ||
-                   (brightness > 145 && redness > 8 && skinDiff > 20);
+        // Comedones: dark or bright spots - STRICTER THRESHOLDS
+        isLesion = (brightness < 105 && r < localSkinR - 35 && skinDiff > 50) ||
+                   (brightness > 155 && redness > 15 && skinDiff > 30);
       } else {
-        // Default: use general detection
-        isLesion = (redness > 15 && brightness > 70 && brightness < 240 && skinDiff > 30) ||
-                   (brightness < 120 && r < localSkinR - 30 && skinDiff > 40) ||
-                   (brightness > 150 && redness > 10 && skinDiff > 25);
+        // Default: use general detection - STRICTER THRESHOLDS
+        isLesion = (redness > 25 && brightness > 80 && brightness < 230 && skinDiff > 45) ||
+                   (brightness < 110 && r < localSkinR - 40 && skinDiff > 55) ||
+                   (brightness > 160 && redness > 18 && skinDiff > 35);
       }
 
       if (isLesion) {
@@ -370,8 +376,14 @@ const extractContoursFromPatch = (
           processedPixels
         );
 
-        if (lesion && lesion.area >= 2) {
-          lesions.push(lesion);
+        // Filter by minimum size - at least 0.1mm²
+        if (lesion) {
+          const areaMm2 = lesion.area * (calibration.pixelsPerMm * calibration.pixelsPerMm);
+          const minAreaPixels = Math.max(8, Math.floor(0.1 / (calibration.pixelsPerMm * calibration.pixelsPerMm)));
+          
+          if (lesion.area >= minAreaPixels && areaMm2 >= 0.1) {
+            lesions.push(lesion);
+          }
         }
       }
     }
@@ -554,14 +566,17 @@ export const detectLesions = (
       const redness = r - ((g + b) / 2);
       const skinDiff = Math.abs(r - skinTone.r) + Math.abs(g - skinTone.g) + Math.abs(b - skinTone.b);
 
-      // Detect inflammatory lesions (red, raised)
-      const isInflammatory = redness > 15 && brightness > 70 && brightness < 240 && skinDiff > 30;
+      // Detect inflammatory lesions (red, raised) - VERY STRICT THRESHOLDS
+      // Increased redness threshold from 25 to 35 to avoid normal skin variations
+      const isInflammatory = redness > 35 && brightness > 85 && brightness < 225 && skinDiff > 55;
       
-      // Detect comedones (dark spots)
-      const isComedonal = brightness < 120 && r < skinTone.r - 30 && skinDiff > 40;
+      // Detect comedones (dark spots) - VERY STRICT THRESHOLDS
+      // Increased skin difference threshold to avoid normal pores
+      const isComedonal = brightness < 100 && r < skinTone.r - 50 && skinDiff > 65;
       
-      // Detect bright spots (whiteheads/pustules)
-      const isBright = brightness > 150 && redness > 10 && skinDiff > 25;
+      // Detect bright spots (whiteheads/pustules) - VERY STRICT THRESHOLDS
+      // Increased brightness and redness thresholds significantly
+      const isBright = brightness > 170 && redness > 25 && skinDiff > 45;
 
       if (isInflammatory || isComedonal || isBright) {
         binaryMap[y * width + x] = 1;
@@ -591,9 +606,15 @@ export const detectLesions = (
           `lesion_${lesionId++}`
         );
         
-        // Filter by minimum size (at least 2 pixels)
-        if (lesion && lesion.area >= 2) {
-          lesions.push(lesion);
+        // Filter by minimum size - at least 0.1mm² (approximately 10-20 pixels depending on calibration)
+        // Convert area to mm² for filtering
+        if (lesion) {
+          const areaMm2 = lesion.area * (calibration.pixelsPerMm * calibration.pixelsPerMm);
+          const minAreaPixels = Math.max(8, Math.floor(0.1 / (calibration.pixelsPerMm * calibration.pixelsPerMm)));
+          
+          if (lesion.area >= minAreaPixels && areaMm2 >= 0.1) {
+            lesions.push(lesion);
+          }
         }
       }
     }
@@ -602,40 +623,60 @@ export const detectLesions = (
   // Step 4: Apply watershed-like algorithm to separate touching lesions
   const separatedLesions = separateTouchingLesions(lesions, width, height);
 
-  return separatedLesions;
+  // Step 5: Post-processing filter to remove false positives
+  return filterLesions(separatedLesions, calibration);
 };
 
 /**
  * Apply morphological operations to clean binary map
+ * More aggressive noise removal to reduce false positives
  */
 const applyMorphology = (binaryMap: number[], width: number, height: number): number[] => {
-  const result = [...binaryMap];
+  // Step 1: Erosion - remove small noise and isolated pixels
+  const eroded = new Array(width * height).fill(0);
   
-  // Erosion: remove small noise
+  for (let y = 2; y < height - 2; y++) {
+    for (let x = 2; x < width - 2; x++) {
+      const idx = y * width + x;
+      if (binaryMap[idx] === 1) {
+        // Count neighbors in 3x3 area
+        let neighborCount = 0;
+        for (let dy = -1; dy <= 1; dy++) {
+          for (let dx = -1; dx <= 1; dx++) {
+            if (dx === 0 && dy === 0) continue;
+            const nIdx = (y + dy) * width + (x + dx);
+            if (binaryMap[nIdx] === 1) {
+              neighborCount++;
+            }
+          }
+        }
+        // Keep pixel only if it has at least 3 neighbors (not isolated)
+        if (neighborCount >= 3) {
+          eroded[idx] = 1;
+        }
+      }
+    }
+  }
+  
+  // Step 2: Dilation - restore size of valid lesions
+  const dilated = new Array(width * height).fill(0);
+  
   for (let y = 1; y < height - 1; y++) {
     for (let x = 1; x < width - 1; x++) {
       const idx = y * width + x;
-      if (binaryMap[idx] === 1) {
-        // Check if all neighbors are 1
-        let allNeighbors = true;
+      if (eroded[idx] === 1) {
+        // Restore pixel and its neighbors
         for (let dy = -1; dy <= 1; dy++) {
           for (let dx = -1; dx <= 1; dx++) {
             const nIdx = (y + dy) * width + (x + dx);
-            if (binaryMap[nIdx] === 0) {
-              allNeighbors = false;
-              break;
-            }
+            dilated[nIdx] = 1;
           }
-          if (!allNeighbors) break;
-        }
-        if (!allNeighbors) {
-          result[idx] = 0; // Remove isolated pixels
         }
       }
     }
   }
 
-  return result;
+  return dilated;
 };
 
 /**
@@ -833,6 +874,57 @@ const separateTouchingLesions = (
 };
 
 /**
+ * Filter lesions to remove false positives
+ * Applies multiple criteria to ensure only real lesions are kept
+ * VERY AGGRESSIVE FILTERING to prevent false positives
+ */
+const filterLesions = (lesions: Lesion[], calibration: CalibrationData): Lesion[] => {
+  const filtered = lesions.filter(lesion => {
+    // 1. Minimum area: at least 0.3mm² (increased from 0.2mm² for MUCH stricter filtering)
+    const areaMm2 = lesion.area * (calibration.pixelsPerMm * calibration.pixelsPerMm);
+    if (areaMm2 < 0.3) return false;
+    
+    // 2. Minimum pixel area: at least 30 pixels (increased from 20)
+    if (lesion.area < 30) return false;
+    
+    // 3. Minimum circularity: at least 0.3 (filters very irregular noise)
+    if (lesion.circularity < 0.3) return false;
+    
+    // 4. Minimum redness for inflammatory lesions: at least 30 (increased from 25)
+    if (lesion.isInflammatory && lesion.redness < 30) return false;
+    
+    // 5. Minimum intensity difference: lesion should be noticeably different from skin
+    // For dark lesions (comedones), center intensity should be < 90
+    // For bright lesions (pustules), center intensity should be > 140
+    if (lesion.centerIntensity > 100 && lesion.centerIntensity < 140) {
+      // Suspicious middle range - might be normal skin texture
+      if (lesion.redness < 35) return false; // Not red enough to be inflammatory
+    }
+    
+    // 6. Aspect ratio: width/height should be reasonable (not extremely elongated)
+    const aspectRatio = lesion.width / Math.max(lesion.height, 1);
+    if (aspectRatio > 3 || aspectRatio < 0.33) return false; // Too elongated
+    
+    // 7. Additional validation: Lesion must have significant color difference
+    // Check if the lesion stands out from background
+    const colorDifference = Math.abs(lesion.centerIntensity - 128); // Distance from neutral gray
+    if (colorDifference < 20 && lesion.redness < 30) return false; // Too similar to normal skin
+    
+    return true;
+  });
+  
+  // 8. Limit total lesions to prevent over-detection - REDUCED to 30
+  // Sort by area (largest first) and keep top 30 lesions max
+  const sorted = filtered.sort((a, b) => {
+    const areaA = a.area * (calibration.pixelsPerMm * calibration.pixelsPerMm);
+    const areaB = b.area * (calibration.pixelsPerMm * calibration.pixelsPerMm);
+    return areaB - areaA;
+  });
+  
+  return sorted.slice(0, 30); // Maximum 30 lesions (reduced from 50)
+};
+
+/**
  * Classify lesion type based on precise rules
  */
 export const classifyLesion = (lesion: Lesion): Lesion => {
@@ -1012,8 +1104,11 @@ export const analyzeLesions = async (
     detectedLesions = detectLesions(pixels, width, height, skinTone, calibration);
   }
 
-  // Step 2: Classify each lesion
-  const classifiedLesions = detectedLesions.map(lesion => classifyLesion(lesion));
+  // Step 2: Post-process and filter lesions before classification
+  const filteredLesions = filterLesions(detectedLesions, calibration);
+  
+  // Step 3: Classify each lesion
+  const classifiedLesions = filteredLesions.map(lesion => classifyLesion(lesion));
 
   // Step 3: Define ROIs
   const roiDefinitions = defineROIs(width, height);
@@ -1046,12 +1141,34 @@ export const analyzeLesions = async (
     ? classifiedLesions.reduce((sum, l) => sum + l.rednessPercent, 0) / totalCount
     : 0;
 
-  // Determine severity
+  // Determine severity - VERY CONSERVATIVE THRESHOLDS
+  // Clear skin should ALWAYS show Mild, not Severe
   let severity: 'Mild' | 'Moderate' | 'Severe' = 'Mild';
-  if (averageDensity > 3 || inflammatoryPercent > 50 || nodules > 0) {
+  
+  // Clear skin check: If very few lesions, always Mild
+  if (totalCount <= 5) {
+    severity = 'Mild';
+  }
+  // Severe: Only for truly severe cases - requires MULTIPLE criteria
+  else if (
+    (averageDensity > 8 && inflammatoryPercent > 70) || // High density AND high inflammation
+    (totalCount > 80 && inflammatoryPercent > 50) || // Many lesions AND inflammation
+    (nodules > 5) || // Multiple large nodules
+    (totalCount > 100) // Extreme case
+  ) {
     severity = 'Severe';
-  } else if (averageDensity > 1 || inflammatoryPercent > 20) {
+  } 
+  // Moderate: Clear threshold - requires significant evidence
+  else if (
+    (averageDensity > 4 && inflammatoryPercent > 40) || // Moderate density AND inflammation
+    (totalCount > 40 && inflammatoryPercent > 30) || // Many lesions with inflammation
+    (nodules > 2 && totalCount > 30) // Multiple nodules with other lesions
+  ) {
     severity = 'Moderate';
+  }
+  // Mild: Everything else (including clear skin with few lesions)
+  else {
+    severity = 'Mild';
   }
 
   // Create visual map

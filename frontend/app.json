@@ -17,7 +17,7 @@
       "supportsTablet": true,
       "infoPlist": {
         "NSCameraUsageDescription": "Capture selfies to analyze skin",
-        "NSPhotoLibraryUsageDescription": "Save skin analysis results",
+        "NSPhotoLibraryUsageDescription": "Select images from your gallery to analyze skin",
         "NSPhotoLibraryAddUsageDescription": "Save analysis photos to your gallery"
       },
       "bundleIdentifier": "com.dermasnap.app"
@@ -33,9 +33,7 @@
         "READ_EXTERNAL_STORAGE",
         "WRITE_EXTERNAL_STORAGE",
         "READ_MEDIA_IMAGES",
-        "ACCESS_MEDIA_LOCATION",
-        "RECEIVE_BOOT_COMPLETED",
-        "SCHEDULE_EXACT_ALARM"
+        "ACCESS_MEDIA_LOCATION"
       ],
       "package": "com.dermasnap.app"
     },
@@ -61,9 +59,14 @@
         }
       ],
       [
+        "expo-image-picker",
+        {
+          "photosPermission": "Select images from your gallery to analyze skin"
+        }
+      ],
+      [
         "expo-notifications",
         {
-          "icon": "./assets/images/notification-icon.png",
           "color": "#00B894",
           "sounds": []
         }
@@ -80,6 +83,12 @@
     ],
     "experiments": {
       "typedRoutes": true
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "d51bd81e-45cb-4f3e-bc7a-883aca80cdce"
+      }
     }
   }
 }

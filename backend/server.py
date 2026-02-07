@@ -21,7 +21,7 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-# MongoDB connection
+# MongoDB connection with SSL/TLS support
 mongo_url = os.environ.get('MONGO_URL')
 db_name = os.environ.get('DB_NAME', 'dermasnap')
 
@@ -31,8 +31,36 @@ if not mongo_url:
     logger.warning("To set custom MongoDB URL, add MONGO_URL to backend/.env file")
     mongo_url = "mongodb://localhost:27017"
 
-client = AsyncIOMotorClient(mongo_url)
-db = client[db_name]
+# Configure MongoDB connection with SSL/TLS for Atlas
+# MongoDB Atlas requires SSL, so we ensure it's enabled for mongodb+srv:// connections
+connection_kwargs = {
+    "serverSelectionTimeoutMS": 30000,  # 30 second timeout
+    "connectTimeoutMS": 30000,
+    "socketTimeoutMS": 30000,
+    "retryWrites": True,
+}
+
+# For MongoDB Atlas (mongodb+srv://), SSL is required and enabled by default
+# For local MongoDB, SSL is not needed
+if mongo_url.startswith("mongodb+srv://"):
+    # Ensure SSL is explicitly enabled for Atlas connections
+    # Motor automatically handles SSL for mongodb+srv://, but we can add extra params
+    if "tls=true" not in mongo_url and "ssl=true" not in mongo_url:
+        # Add TLS parameters to connection string if not present
+        separator = "&" if "?" in mongo_url else "?"
+        mongo_url = f"{mongo_url}{separator}tls=true&tlsAllowInvalidCertificates=false"
+    logger.info("Connecting to MongoDB Atlas with SSL/TLS...")
+else:
+    logger.info("Connecting to local MongoDB...")
+
+try:
+    client = AsyncIOMotorClient(mongo_url, **connection_kwargs)
+    db = client[db_name]
+    # Test connection
+    logger.info(f"✅ MongoDB client initialized for database: {db_name}")
+except Exception as e:
+    logger.error(f"❌ Failed to initialize MongoDB client: {e}")
+    raise
 
 # Create the main app without a prefix
 app = FastAPI()
@@ -113,18 +141,33 @@ async def create_scan(scan: ScanData):
     Save a new skin scan analysis with image stored in database
     Images are stored as base64 in MongoDB (consider GridFS for production with large images)
     """
-    try:
-        scan_dict = scan.dict()
-        # Store everything including imageBase64 in database
-        # For production, consider using GridFS or cloud storage (S3) for large images
-        # For now, base64 in MongoDB works for moderate image sizes
-        
-        result = await db.scans.insert_one(scan_dict)
-        logger.info(f"Scan saved with ID: {result.inserted_id}")
-        return {"id": str(result.inserted_id), "message": "Scan saved successfully"}
-    except Exception as e:
-        logger.error(f"Error saving scan: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=f"Failed to save scan: {str(e)}")
+    max_retries = 3
+    retry_delay = 1  # seconds
+    
+    for attempt in range(max_retries):
+        try:
+            scan_dict = scan.dict()
+            # Store everything including imageBase64 in database
+            # For production, consider using GridFS or cloud storage (S3) for large images
+            # For now, base64 in MongoDB works for moderate image sizes
+            
+            result = await db.scans.insert_one(scan_dict)
+            logger.info(f"Scan saved with ID: {result.inserted_id}")
+            return {"id": str(result.inserted_id), "message": "Scan saved successfully"}
+        except Exception as e:
+            error_str = str(e)
+            is_ssl_error = "SSL" in error_str or "TLS" in error_str or "handshake" in error_str.lower()
+            
+            if attempt < max_retries - 1 and is_ssl_error:
+                logger.warning(f"SSL/TLS error on attempt {attempt + 1}/{max_retries}: {error_str}")
+                logger.info(f"Retrying in {retry_delay} seconds...")
+                import asyncio
+                await asyncio.sleep(retry_delay)
+                retry_delay *= 2  # Exponential backoff
+                continue
+            else:
+                logger.error(f"Error saving scan (attempt {attempt + 1}/{max_retries}): {e}", exc_info=True)
+                raise HTTPException(status_code=500, detail=f"Failed to save scan: {str(e)}")
 
 @api_router.get("/scans", response_model=List[Dict[str, Any]])
 async def get_scans(limit: int = 50, skip: int = 0):
@@ -316,6 +359,15 @@ app.add_middleware(
 async def startup_event():
     """Initialize services on startup"""
     logger.info("Application startup...")
+    
+    # Test MongoDB connection
+    try:
+        await client.admin.command('ping')
+        logger.info("✅ MongoDB connection successful")
+    except Exception as e:
+        logger.error(f"❌ MongoDB connection failed: {e}")
+        logger.error("⚠️  Database operations may fail. Check MONGO_URL and network connectivity.")
+    
     logger.info("✅ Application started successfully")
     logger.info("ℹ️  Using YOLO + rule-based lesion analysis")
 

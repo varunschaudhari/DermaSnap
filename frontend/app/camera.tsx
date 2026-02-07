@@ -5,6 +5,8 @@ import { useRouter, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import Svg, { Circle, Ellipse, Line, Text as SvgText } from 'react-native-svg';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import * as ImagePicker from 'expo-image-picker';
+import * as FileSystem from 'expo-file-system';
 
 const { width, height } = Dimensions.get('window');
 
@@ -12,6 +14,7 @@ export default function CameraScreen() {
   const router = useRouter();
   const { type } = useLocalSearchParams();
   const [permission, requestPermission] = useCameraPermissions();
+  const [mediaPermission, requestMediaPermission] = ImagePicker.useMediaLibraryPermissions();
   const [facing, setFacing] = useState<'front' | 'back'>('front');
   const [isCapturing, setIsCapturing] = useState(false);
   const [isCameraReady, setIsCameraReady] = useState(false);
@@ -22,6 +25,13 @@ export default function CameraScreen() {
       requestPermission();
     }
   }, [permission]);
+
+  useEffect(() => {
+    // Request media library permission on mount
+    if (mediaPermission && !mediaPermission.granted) {
+      requestMediaPermission();
+    }
+  }, [mediaPermission]);
 
   if (!permission) {
     return (
@@ -51,27 +61,22 @@ export default function CameraScreen() {
     );
   }
 
-  const takePicture = async () => {
-    if (!cameraRef.current || isCapturing || !isCameraReady) {
-      console.log('Camera not ready or already capturing');
-      return;
-    }
-
+  const processImage = async (uri: string, base64: string | null) => {
     try {
       setIsCapturing(true);
-      console.log('Taking picture...');
       
-      const photo = await cameraRef.current.takePictureAsync({
-        quality: 0.8,
-        base64: true,
-      });
-
-      console.log('Picture taken, URI:', photo.uri);
+      // If base64 is not provided, read it from file
+      let imageBase64 = base64;
+      if (!imageBase64) {
+        imageBase64 = await FileSystem.readAsStringAsync(uri, {
+          encoding: FileSystem.EncodingType.Base64,
+        });
+      }
 
       // Store image data temporarily in AsyncStorage to avoid URL param size limits
       await AsyncStorage.setItem('temp_scan_image', JSON.stringify({
-        uri: photo.uri,
-        base64: photo.base64,
+        uri: uri,
+        base64: imageBase64,
         analysisType: type,
         timestamp: new Date().toISOString(),
       }));
@@ -82,8 +87,66 @@ export default function CameraScreen() {
       router.push('/processing');
       
     } catch (error) {
+      console.error('Error processing image:', error);
+      Alert.alert('Error', 'Failed to process image. Please try again.');
+      setIsCapturing(false);
+    }
+  };
+
+  const takePicture = async () => {
+    if (!cameraRef.current || isCapturing || !isCameraReady) {
+      console.log('Camera not ready or already capturing');
+      return;
+    }
+
+    try {
+      console.log('Taking picture...');
+      
+      const photo = await cameraRef.current.takePictureAsync({
+        quality: 0.8,
+        base64: true,
+      });
+
+      console.log('Picture taken, URI:', photo.uri);
+      await processImage(photo.uri, photo.base64 || null);
+      
+    } catch (error) {
       console.error('Error taking picture:', error);
       Alert.alert('Error', 'Failed to capture image. Please try again.');
+      setIsCapturing(false);
+    }
+  };
+
+  const pickImageFromGallery = async () => {
+    try {
+      if (!mediaPermission?.granted) {
+        const result = await requestMediaPermission();
+        if (!result.granted) {
+          Alert.alert('Permission Required', 'Please grant access to your photo library to select images.');
+          return;
+        }
+      }
+
+      console.log('Picking image from gallery...');
+      
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        allowsEditing: true,
+        aspect: [3, 4], // Portrait aspect ratio
+        quality: 0.8,
+        base64: true,
+      });
+
+      if (!result.canceled && result.assets && result.assets.length > 0) {
+        const asset = result.assets[0];
+        console.log('Image selected from gallery, URI:', asset.uri);
+        await processImage(asset.uri, asset.base64 || null);
+      } else {
+        console.log('Image picker cancelled');
+      }
+    } catch (error) {
+      console.error('Error picking image:', error);
+      Alert.alert('Error', 'Failed to pick image from gallery. Please try again.');
       setIsCapturing(false);
     }
   };
@@ -204,6 +267,17 @@ export default function CameraScreen() {
 
       {/* Controls */}
       <View style={styles.controls}>
+        {/* Gallery Button */}
+        <TouchableOpacity
+          style={styles.galleryButton}
+          onPress={pickImageFromGallery}
+          disabled={isCapturing}
+          activeOpacity={0.8}
+        >
+          <Ionicons name="images" size={24} color="#00B894" />
+        </TouchableOpacity>
+
+        {/* Capture Button */}
         <TouchableOpacity
           style={styles.captureButton}
           onPress={takePicture}
@@ -211,15 +285,19 @@ export default function CameraScreen() {
           activeOpacity={0.8}
         >
           {isCapturing ? (
-            <ActivityIndicator size="large" color="#00B894" />
+            <ActivityIndicator size="large" color="#FFFFFF" />
           ) : (
             <View style={styles.captureButtonInner}>
               <Ionicons name="camera" size={32} color="#FFFFFF" />
             </View>
           )}
         </TouchableOpacity>
+
+        {/* Placeholder for symmetry */}
+        <View style={styles.galleryButton} />
+        
         {isCapturing && (
-          <Text style={styles.capturingText}>Capturing...</Text>
+          <Text style={styles.capturingText}>Processing...</Text>
         )}
       </View>
     </View>
@@ -372,7 +450,20 @@ const styles = StyleSheet.create({
     bottom: 50,
     left: 0,
     right: 0,
+    flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'center',
+    gap: 40,
+  },
+  galleryButton: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: 'rgba(255, 255, 255, 0.95)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 2,
+    borderColor: '#00B894',
   },
   captureButton: {
     width: 80,
