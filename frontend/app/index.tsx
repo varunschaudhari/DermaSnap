@@ -166,31 +166,8 @@ export default function HomeScreen() {
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
       >
-        {/* Quick Scan Button */}
-        <TouchableOpacity
-          style={styles.quickScanButton}
-          onPress={() => navigateToAnalysis('full')}
-          activeOpacity={0.8}
-        >
-          <LinearGradient
-            colors={['#00B894', '#00CEC9']}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 1 }}
-            style={styles.quickScanGradient}
-          >
-            <View style={styles.quickScanIcon}>
-              <Ionicons name="scan" size={32} color="#FFFFFF" />
-            </View>
-            <View style={styles.quickScanTextContainer}>
-              <Text style={styles.quickScanTitle}>Full Skin Scan</Text>
-              <Text style={styles.quickScanSubtitle}>Complete analysis of all conditions</Text>
-            </View>
-            <Ionicons name="chevron-forward" size={24} color="#FFFFFF" />
-          </LinearGradient>
-        </TouchableOpacity>
-
         {/* Section Title */}
-        <Text style={styles.sectionTitle}>Individual Analysis</Text>
+        <Text style={styles.sectionTitle}>Choose Analysis Type</Text>
 
         {/* Condition Cards */}
         <View style={styles.cardsContainer}>

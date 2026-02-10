@@ -7,6 +7,7 @@ import Svg, { Circle, Ellipse, Line, Text as SvgText } from 'react-native-svg';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as ImagePicker from 'expo-image-picker';
 import * as FileSystem from 'expo-file-system';
+import * as ImageManipulator from 'expo-image-manipulator';
 
 const { width, height } = Dimensions.get('window');
 
@@ -103,12 +104,39 @@ export default function CameraScreen() {
       console.log('Taking picture...');
       
       const photo = await cameraRef.current.takePictureAsync({
-        quality: 0.8,
+        quality: 0.9,
         base64: true,
       });
 
-      console.log('Picture taken, URI:', photo.uri);
-      await processImage(photo.uri, photo.base64 || null);
+      console.log('Picture taken, URI:', photo.uri, 'size:', photo.width, 'x', photo.height);
+
+      // Crop centrally to focus on the face region for more precise analysis
+      const cropWidth = Math.floor(photo.width * 0.7);
+      const cropHeight = Math.floor(photo.height * 0.65);
+      const originX = Math.floor((photo.width - cropWidth) / 2);
+      const originY = Math.floor((photo.height - cropHeight) / 2);
+
+      const cropped = await ImageManipulator.manipulateAsync(
+        photo.uri,
+        [
+          {
+            crop: {
+              originX,
+              originY,
+              width: cropWidth,
+              height: cropHeight,
+            },
+          },
+        ],
+        {
+          compress: 0.9,
+          format: ImageManipulator.SaveFormat.JPEG,
+          base64: true,
+        },
+      );
+
+      console.log('Cropped image size:', cropped.width, 'x', cropped.height);
+      await processImage(cropped.uri, cropped.base64 || null);
       
     } catch (error) {
       console.error('Error taking picture:', error);
@@ -163,8 +191,6 @@ export default function CameraScreen() {
         return 'Pigmentation Analysis';
       case 'wrinkles':
         return 'Wrinkles Analysis';
-      case 'full':
-        return 'Full Skin Scan';
       default:
         return 'Skin Analysis';
     }
