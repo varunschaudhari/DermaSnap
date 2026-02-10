@@ -17,6 +17,9 @@ from yolo_service import get_yolo_service
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
 UPLOAD_DIR = Path(os.environ.get("UPLOAD_DIR", ROOT_DIR / "uploads"))
+UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
+for upload_type in ("acne", "wrinkles", "pimple"):
+    (UPLOAD_DIR / upload_type).mkdir(parents=True, exist_ok=True)
 
 # Configure logging early
 logging.basicConfig(
