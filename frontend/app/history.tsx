@@ -157,7 +157,6 @@ export default function HistoryScreen() {
       case 'acne': return 'Acne';
       case 'pigmentation': return 'Pigmentation';
       case 'wrinkles': return 'Wrinkles';
-      case 'full': return 'Full Scan';
       default: return 'Analysis';
     }
   };

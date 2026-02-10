@@ -48,11 +48,7 @@ export default function ResultsScreen() {
             const fullScan = await response.json() as ScanData;
             setResults(fullScan);
             
-            if (fullScan.analysisType === 'full') {
-              setSelectedTab('acne');
-            } else {
-              setSelectedTab(fullScan.analysisType);
-            }
+            setSelectedTab(fullScan.analysisType);
             setLoading(false);
             return;
           }
@@ -66,11 +62,7 @@ export default function ResultsScreen() {
         try {
           const data = JSON.parse(resultsData);
           setResults(data);
-          if (data.analysisType === 'full') {
-            setSelectedTab('acne');
-          } else {
-            setSelectedTab(data.analysisType);
-          }
+          setSelectedTab(data.analysisType);
           setLoading(false);
           return;
         } catch (error) {
@@ -90,11 +82,7 @@ export default function ResultsScreen() {
             if (response.ok) {
               const fullScan = await response.json() as ScanData;
               setResults(fullScan);
-              if (fullScan.analysisType === 'full') {
-                setSelectedTab('acne');
-              } else {
-                setSelectedTab(fullScan.analysisType);
-              }
+              setSelectedTab(fullScan.analysisType);
               setLoading(false);
               return;
             }
@@ -105,11 +93,7 @@ export default function ResultsScreen() {
         
         // Use local data as last resort (without image)
         setResults(data);
-        if (data.analysisType === 'full') {
-          setSelectedTab('acne');
-        } else {
-          setSelectedTab(data.analysisType);
-        }
+        setSelectedTab(data.analysisType);
       } else {
         console.error('No scan results found');
         router.back();

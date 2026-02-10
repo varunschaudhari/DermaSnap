@@ -145,7 +145,7 @@ export default function ProfileDetailScreen() {
         <Text style={styles.sectionTitle}>Quick Actions</Text>
         <TouchableOpacity
           style={styles.actionButton}
-          onPress={() => router.push('/camera?type=full')}
+          onPress={() => router.push('/camera?type=acne')}
         >
           <Ionicons name="camera" size={20} color="#00B894" />
           <Text style={styles.actionButtonText}>New Scan</Text>

@@ -1,6 +1,7 @@
 from fastapi import FastAPI, APIRouter, HTTPException
 from dotenv import load_dotenv
 from starlette.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 from motor.motor_asyncio import AsyncIOMotorClient
 import os
 import logging
@@ -9,10 +10,13 @@ from pydantic import BaseModel, Field
 from typing import List, Optional, Dict, Any
 from datetime import datetime
 from bson import ObjectId
+import base64
+from uuid import uuid4
 from yolo_service import get_yolo_service
 
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
+UPLOAD_DIR = Path(os.environ.get("UPLOAD_DIR", ROOT_DIR / "uploads"))
 
 # Configure logging early
 logging.basicConfig(
@@ -141,6 +145,52 @@ class ScanData(BaseModel):
     pigmentation: Optional[AnalysisResult] = None
     wrinkles: Optional[AnalysisResult] = None
 
+
+def _resolve_storage_type(analysis_type: str) -> str:
+    """
+    Normalize analysis type for on-disk storage folders.
+    User requirement:
+    - keep categories like acne, wrinkles, pimple
+    - remove full scan
+    """
+    normalized = (analysis_type or "").strip().lower()
+    if normalized == "full":
+        raise HTTPException(status_code=400, detail="Full scan is no longer supported")
+    if normalized == "pigmentation":
+        return "pimple"
+    if normalized in {"acne", "wrinkles", "pimple"}:
+        return normalized
+    return "acne"
+
+
+def _decode_base64_image(image_base64: str) -> bytes:
+    if "," in image_base64:
+        image_base64 = image_base64.split(",", 1)[1]
+    return base64.b64decode(image_base64)
+
+
+def _get_image_extension(image_base64: str) -> str:
+    if image_base64.startswith("data:image/png"):
+        return ".png"
+    if image_base64.startswith("data:image/webp"):
+        return ".webp"
+    return ".jpg"
+
+
+def _save_image_to_disk(image_base64: str, storage_type: str) -> Dict[str, str]:
+    timestamp = datetime.utcnow().strftime("%Y%m%d_%H%M%S")
+    extension = _get_image_extension(image_base64)
+    filename = f"{timestamp}_{uuid4().hex}{extension}"
+    target_dir = UPLOAD_DIR / storage_type
+    target_dir.mkdir(parents=True, exist_ok=True)
+    image_path = target_dir / filename
+    image_path.write_bytes(_decode_base64_image(image_base64))
+    relative_path = image_path.relative_to(ROOT_DIR).as_posix()
+    return {
+        "imagePath": str(image_path),
+        "imageUrl": f"/{relative_path}",
+    }
+
 class ScanResponse(BaseModel):
     id: str
     imageUri: str
@@ -165,8 +215,8 @@ async def health():
 @api_router.post("/scans", response_model=Dict[str, str])
 async def create_scan(scan: ScanData):
     """
-    Save a new skin scan analysis with image stored in database
-    Images are stored as base64 in MongoDB (consider GridFS for production with large images)
+    Save a new skin scan analysis.
+    Image is stored on local disk by scan type; Mongo stores metadata and image path.
     """
     max_retries = 3
     retry_delay = 1  # seconds
@@ -174,9 +224,13 @@ async def create_scan(scan: ScanData):
     for attempt in range(max_retries):
         try:
             scan_dict = scan.dict()
-            # Store everything including imageBase64 in database
-            # For production, consider using GridFS or cloud storage (S3) for large images
-            # For now, base64 in MongoDB works for moderate image sizes
+            storage_type = _resolve_storage_type(scan_dict.get("analysisType", ""))
+            image_meta = _save_image_to_disk(scan_dict["imageBase64"], storage_type)
+            scan_dict["analysisType"] = storage_type
+            scan_dict["imageUri"] = image_meta["imageUrl"]
+            scan_dict["imagePath"] = image_meta["imagePath"]
+            # Keep DB lean by removing raw base64 payload
+            scan_dict.pop("imageBase64", None)
             
             result = await db.scans.insert_one(scan_dict)
             logger.info(f"Scan saved with ID: {result.inserted_id}")
@@ -241,6 +295,19 @@ async def delete_scan(scan_id: str):
         if not ObjectId.is_valid(scan_id):
             raise HTTPException(status_code=400, detail="Invalid scan ID")
         
+        existing_scan = await db.scans.find_one({"_id": ObjectId(scan_id)})
+        if not existing_scan:
+            raise HTTPException(status_code=404, detail="Scan not found")
+
+        image_path = existing_scan.get("imagePath")
+        if image_path:
+            try:
+                image_file = Path(image_path)
+                if image_file.exists():
+                    image_file.unlink()
+            except Exception as file_error:
+                logger.warning(f"Failed to delete image file for scan {scan_id}: {file_error}")
+
         result = await db.scans.delete_one({"_id": ObjectId(scan_id)})
         if result.deleted_count == 0:
             raise HTTPException(status_code=404, detail="Scan not found")
@@ -264,15 +331,15 @@ async def get_scan_statistics():
         acne_count = await db.scans.count_documents({"analysisType": "acne"})
         pigmentation_count = await db.scans.count_documents({"analysisType": "pigmentation"})
         wrinkles_count = await db.scans.count_documents({"analysisType": "wrinkles"})
-        full_count = await db.scans.count_documents({"analysisType": "full"})
+        pimple_count = await db.scans.count_documents({"analysisType": "pimple"})
         
         return {
             "totalScans": total_scans,
             "byType": {
                 "acne": acne_count,
                 "pigmentation": pigmentation_count,
+                "pimple": pimple_count,
                 "wrinkles": wrinkles_count,
-                "full": full_count,
             }
         }
     except Exception as e:
@@ -373,6 +440,7 @@ async def analyze_with_yolo(data: Dict[str, Any]):
 
 # Include the router in the main app (must be after all route definitions)
 app.include_router(api_router)
+app.mount("/uploads", StaticFiles(directory=UPLOAD_DIR), name="uploads")
 
 app.add_middleware(
     CORSMiddleware,

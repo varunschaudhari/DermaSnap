@@ -165,7 +165,7 @@ export default function ProgressScreen() {
             <Text style={styles.emptyText}>Take at least 2 scans to track your progress</Text>
             <TouchableOpacity
               style={styles.scanButton}
-              onPress={() => router.push('/camera?type=full')}
+              onPress={() => router.push('/camera?type=acne')}
             >
               <Ionicons name="camera" size={20} color="#FFFFFF" />
               <Text style={styles.scanButtonText}>Take a Scan</Text>

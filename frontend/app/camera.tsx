@@ -14,6 +14,7 @@ const { width, height } = Dimensions.get('window');
 export default function CameraScreen() {
   const router = useRouter();
   const { type } = useLocalSearchParams();
+  const normalizedType = type === 'acne' || type === 'pigmentation' || type === 'wrinkles' ? type : 'acne';
   const [permission, requestPermission] = useCameraPermissions();
   const [mediaPermission, requestMediaPermission] = ImagePicker.useMediaLibraryPermissions();
   const [facing, setFacing] = useState<'front' | 'back'>('front');
@@ -70,7 +71,7 @@ export default function CameraScreen() {
       let imageBase64 = base64;
       if (!imageBase64) {
         imageBase64 = await FileSystem.readAsStringAsync(uri, {
-          encoding: FileSystem.EncodingType.Base64,
+          encoding: 'base64',
         });
       }
 
@@ -78,7 +79,7 @@ export default function CameraScreen() {
       await AsyncStorage.setItem('temp_scan_image', JSON.stringify({
         uri: uri,
         base64: imageBase64,
-        analysisType: type,
+        analysisType: normalizedType,
         timestamp: new Date().toISOString(),
       }));
 
@@ -184,7 +185,7 @@ export default function CameraScreen() {
   };
 
   const getAnalysisTitle = () => {
-    switch (type) {
+    switch (normalizedType) {
       case 'acne':
         return 'Acne Analysis';
       case 'pigmentation':

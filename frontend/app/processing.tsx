@@ -109,7 +109,7 @@ export default function ProcessingScreen() {
       animateProgress(42);
       await new Promise(resolve => setTimeout(resolve, 1200));
       
-      if (analysisType === 'acne' || analysisType === 'full') {
+      if (analysisType === 'acne') {
         // Use lesion-based analysis with YOLO if available
         const calibration = calibrateImage(pixelData, 800, 600, 'none');
         const lesionAnalysis = await analyzeLesions(
@@ -139,7 +139,7 @@ export default function ProcessingScreen() {
         };
       }
 
-      if (analysisType === 'pigmentation' || analysisType === 'full') {
+      if (analysisType === 'pigmentation') {
         setCurrentStep(3);
         animateProgress(57);
         await new Promise(resolve => setTimeout(resolve, 1200));
@@ -152,7 +152,7 @@ export default function ProcessingScreen() {
         };
       }
 
-      if (analysisType === 'wrinkles' || analysisType === 'full') {
+      if (analysisType === 'wrinkles') {
         setCurrentStep(4);
         animateProgress(71);
         await new Promise(resolve => setTimeout(resolve, 1200));
