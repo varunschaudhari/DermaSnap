@@ -9,6 +9,7 @@ import { analyzeAcne, analyzePigmentation, analyzeWrinkles, detectSkinTone, getS
 import { extractPixelsFromBase64, extractPixelsViaBackend } from '../utils/imagePixelExtraction';
 import { analyzeLesions, calibrateImage, type LesionAnalysisResult } from '../utils/lesionAnalysis';
 import { cleanupOldScans } from '../utils/storageCleanup';
+import { BACKEND_URL } from '../config/api';
 
 interface SaveScanResponse {
   id: string;
@@ -206,18 +207,12 @@ export default function ProcessingScreen() {
 
   const saveResults = async (results: any) => {
     try {
-      const BACKEND_URL = process.env.EXPO_PUBLIC_BACKEND_URL;
-      
       // Get active profile
       const profileData = await AsyncStorage.getItem('active_profile');
       const profile = profileData ? JSON.parse(profileData) : null;
       
       // PRIMARY: Save full data to backend database (with imageBase64)
       // Images are now stored in database, not local storage
-      if (!BACKEND_URL) {
-        throw new Error('Backend URL not configured. Set EXPO_PUBLIC_BACKEND_URL in frontend/.env');
-      }
-      
       try {
         const response = await fetch(`${BACKEND_URL}/api/scans`, {
           method: 'POST',

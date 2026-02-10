@@ -6,6 +6,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { format } from 'date-fns';
 import { LineChart, BarChart } from 'react-native-gifted-charts';
+import { BACKEND_URL } from '../config/api';
 
 const { width } = Dimensions.get('window');
 
@@ -22,7 +23,6 @@ export default function ProgressScreen() {
 
   const loadData = async () => {
     try {
-      const BACKEND_URL = process.env.EXPO_PUBLIC_BACKEND_URL;
       const profileData = await AsyncStorage.getItem('active_profile');
       const profile = profileData ? JSON.parse(profileData) : null;
       
@@ -31,25 +31,23 @@ export default function ProgressScreen() {
       }
       
       // PRIMARY: Load from backend database (includes all data and images)
-      if (BACKEND_URL) {
-        try {
-          const response = await fetch(`${BACKEND_URL}/api/scans?limit=100`);
-          if (response.ok) {
-            const dbScans = await response.json();
-            // Filter by profile if available
-            const filteredScans = profile 
-              ? dbScans.filter((scan: any) => scan.profileId === profile.id)
-              : dbScans;
-            
-            if (filteredScans.length > 0) {
-              setScans(filteredScans);
-              setLoading(false);
-              return;
-            }
+      try {
+        const response = await fetch(`${BACKEND_URL}/api/scans?limit=100`);
+        if (response.ok) {
+          const dbScans = await response.json();
+          // Filter by profile if available
+          const filteredScans = profile
+            ? dbScans.filter((scan: any) => scan.profileId === profile.id)
+            : dbScans;
+
+          if (filteredScans.length > 0) {
+            setScans(filteredScans);
+            setLoading(false);
+            return;
           }
-        } catch (dbError) {
-          console.warn('Failed to load from database:', dbError);
         }
+      } catch (dbError) {
+        console.warn('Failed to load from database:', dbError);
       }
       
       // Fallback: Load metadata from local storage (no images)

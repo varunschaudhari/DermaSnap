@@ -5,6 +5,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { getRecommendations } from '../utils/imageAnalysis';
+import { BACKEND_URL } from '../config/api';
 import Svg, { Circle, Text as SvgText } from 'react-native-svg';
 
 interface ScanData {
@@ -39,8 +40,6 @@ export default function ResultsScreen() {
 
   const loadResults = async () => {
     try {
-      const BACKEND_URL = process.env.EXPO_PUBLIC_BACKEND_URL;
-      
       // If scanId provided, fetch full data from database (includes image)
       if (scanId && BACKEND_URL) {
         try {
@@ -215,7 +214,7 @@ export default function ResultsScreen() {
         {hasLesionAnalysis && lesionAnalysis.rois && lesionAnalysis.rois.length > 0 && (
           <View style={styles.roiCard}>
             <Text style={styles.roiTitle}>Density by Region</Text>
-            {lesionAnalysis.rois.map((roi, index) => (
+            {lesionAnalysis.rois.map((roi: { name: string; lesions: unknown[]; density: number }, index: number) => (
               <View key={index} style={styles.roiItem}>
                 <Text style={styles.roiLabel}>
                   {roi.name.replace('_', ' ').replace(/\b\w/g, l => l.toUpperCase())}

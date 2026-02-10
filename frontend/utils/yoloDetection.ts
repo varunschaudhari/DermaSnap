@@ -1,5 +1,6 @@
 // YOLO-based lesion detection interface
 // Supports both mobile TFLite (future) and backend processing
+import { BACKEND_URL } from '../config/api';
 
 export interface YOLOBox {
   x: number; // Center x
@@ -48,12 +49,6 @@ const detectWithYOLOBackend = async (
   width: number,
   height: number
 ): Promise<YOLODetectionResult> => {
-  const BACKEND_URL = process.env.EXPO_PUBLIC_BACKEND_URL;
-  
-  if (!BACKEND_URL) {
-    throw new Error('Backend URL not configured');
-  }
-
   try {
     const startTime = Date.now();
     
@@ -73,11 +68,19 @@ const detectWithYOLOBackend = async (
       throw new Error(`YOLO detection failed: ${response.statusText}`);
     }
 
-    const result = await response.json();
+    const result: unknown  = await response.json();
+    if (
+      typeof result !== 'object' ||
+      result === null ||
+      !('boxes' in result) ||
+      !Array.isArray((result as { boxes: unknown }).boxes)
+    ) {
+      throw new Error('Invalid YOLO detection response');
+    }
     const inferenceTime = Date.now() - startTime;
 
     // Convert backend boxes to YOLOBox format
-    const boxes: YOLOBox[] = (result.boxes || []).map((box: any) => ({
+    const boxes: YOLOBox[] = ((result as { boxes: unknown[] }).boxes || []).map((box: any) => ({
       x: box.x || box.centerX || 0,
       y: box.y || box.centerY || 0,
       width: box.width || 0,
@@ -89,7 +92,7 @@ const detectWithYOLOBackend = async (
 
     return {
       boxes,
-      model: result.model || 'yolov8-nano',
+      model: (result as { model?: string }).model || 'yolov8-nano',
       inferenceTime,
       method: 'backend',
     };

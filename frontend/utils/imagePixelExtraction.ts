@@ -4,6 +4,7 @@
  */
 
 import * as FileSystem from 'expo-file-system';
+import { BACKEND_URL } from '../config/api';
 
 // Note: For production, consider using expo-gl or a proper image decoder
 // This implementation uses a simplified approach that works but may not be 100% accurate
@@ -82,7 +83,7 @@ export const extractPixelsFromURI = async (
   try {
     // Read file as base64
     const base64 = await FileSystem.readAsStringAsync(uri, {
-      encoding: FileSystem.EncodingType.Base64,
+      encoding: 'base64',
     });
     
     return await extractPixelsFromBase64(base64, width, height);
@@ -133,13 +134,6 @@ export const extractPixelsViaBackend = async (
   height: number
 ): Promise<Uint8ClampedArray> => {
   try {
-    const BACKEND_URL = process.env.EXPO_PUBLIC_BACKEND_URL;
-    
-    if (!BACKEND_URL) {
-      console.warn('EXPO_PUBLIC_BACKEND_URL not set, using local extraction');
-      return extractPixelsFromBase64(imageBase64, width, height);
-    }
-    
     const response = await fetch(`${BACKEND_URL}/api/extract-pixels`, {
       method: 'POST',
       headers: {
@@ -156,8 +150,18 @@ export const extractPixelsViaBackend = async (
       throw new Error(`Pixel extraction failed: ${response.statusText}`);
     }
 
-    const result = await response.json();
-    return new Uint8ClampedArray(result.pixels);
+    const result: unknown = await response.json();
+    if (
+      typeof result !== 'object' ||
+      result === null ||
+      !('pixels' in result) ||
+      !Array.isArray((result as { pixels: unknown }).pixels)
+    ) {
+      throw new Error('Invalid pixel extraction response');
+    }
+
+    const { pixels } = result as { pixels: number[] };
+    return new Uint8ClampedArray(pixels);
   } catch (error) {
     console.warn('Backend pixel extraction failed, using local extraction:', error);
     // Fallback to local extraction

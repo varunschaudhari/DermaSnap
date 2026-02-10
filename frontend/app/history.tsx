@@ -4,6 +4,7 @@ import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { format } from 'date-fns';
+import { BACKEND_URL } from '../config/api';
 
 export default function HistoryScreen() {
   const router = useRouter();
@@ -16,7 +17,6 @@ export default function HistoryScreen() {
 
   const loadScans = async () => {
     try {
-      const BACKEND_URL = process.env.EXPO_PUBLIC_BACKEND_URL;
       const profileData = await AsyncStorage.getItem('active_profile');
       const profile = profileData ? JSON.parse(profileData) : null;
       
@@ -76,8 +76,7 @@ export default function HistoryScreen() {
           onPress: async () => {
             try {
               const scan = scans[index];
-              const BACKEND_URL = process.env.EXPO_PUBLIC_BACKEND_URL;
-              
+
               // Delete from database if it has an ID
               if (scan.id && BACKEND_URL) {
                 try {
@@ -115,8 +114,6 @@ export default function HistoryScreen() {
   };
 
   const viewScan = async (scan: any) => {
-    const BACKEND_URL = process.env.EXPO_PUBLIC_BACKEND_URL;
-    
     // If scan has database ID, fetch full data including image
     if (scan.id && BACKEND_URL) {
       try {

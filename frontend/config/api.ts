@@ -3,11 +3,8 @@
  * Centralized configuration for backend API calls
  */
 
-// Backend URL - can be overridden by environment variable
-// For local development: Create frontend/.env with EXPO_PUBLIC_BACKEND_URL=http://YOUR_IP:8001
-// Get your IP: ipconfig (Windows) or ifconfig (Mac/Linux)
-// Defaults to production backend
-export const BACKEND_URL = process.env.EXPO_PUBLIC_BACKEND_URL || 'https://dermasnap.onrender.com';
+// Backend URL (directly assigned for all builds)
+export const BACKEND_URL = 'https://dermasnap.onrender.com';
 
 // Production backend URL
 export const PRODUCTION_BACKEND_URL = 'https://dermasnap.onrender.com';
