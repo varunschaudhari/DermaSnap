@@ -1,4 +1,5 @@
-from fastapi import FastAPI, APIRouter, HTTPException
+from fastapi import FastAPI, APIRouter, HTTPException, Depends
+from auth.dependencies import get_current_user
 from dotenv import load_dotenv
 from starlette.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
@@ -216,7 +217,7 @@ async def health():
     return {"status": "healthy", "service": "DermaSnap API"}
 
 @api_router.post("/scans", response_model=Dict[str, str])
-async def create_scan(scan: ScanData):
+async def create_scan(scan: ScanData, current_user: dict = Depends(get_current_user)):
     """
     Save a new skin scan analysis.
     Image is stored on local disk by scan type; Mongo stores metadata and image path.
@@ -232,6 +233,7 @@ async def create_scan(scan: ScanData):
             scan_dict["analysisType"] = storage_type
             scan_dict["imageUri"] = image_meta["imageUrl"]
             scan_dict["imagePath"] = image_meta["imagePath"]
+            scan_dict["user_id"] = current_user["id"]  # Add user_id
             # Keep DB lean by removing raw base64 payload
             scan_dict.pop("imageBase64", None)
             
@@ -441,8 +443,25 @@ async def analyze_with_yolo(data: Dict[str, Any]):
         logger.error(f"YOLO detection error: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"YOLO detection failed: {str(e)}")
 
-# Include the router in the main app (must be after all route definitions)
+# Include routers
+from routes import auth, image_quality, treatments, comparison, relationships, admin, treatment_suggestions, roles
+app.include_router(auth.router)
+app.include_router(image_quality.router)
+app.include_router(treatments.router)
+app.include_router(comparison.router)
+app.include_router(relationships.router)
+app.include_router(admin.router)
+app.include_router(roles.router)
+app.include_router(treatment_suggestions.router)
 app.include_router(api_router)
+app.include_router(auth.router, prefix="/api")
+app.include_router(image_quality.router, prefix="/api")
+app.include_router(treatments.router, prefix="/api")
+app.include_router(comparison.router, prefix="/api")
+app.include_router(relationships.router, prefix="/api")
+app.include_router(admin.router, prefix="/api")
+app.include_router(roles.router, prefix="/api")
+app.include_router(treatment_suggestions.router, prefix="/api")
 app.mount("/uploads", StaticFiles(directory=UPLOAD_DIR), name="uploads")
 
 app.add_middleware(
@@ -466,9 +485,24 @@ async def startup_event():
         logger.error(f"❌ MongoDB connection failed: {e}")
         logger.error("⚠️  Database operations may fail. Check MONGO_URL and network connectivity.")
     
+    # Start reminder scheduler
+    try:
+        from services.reminder_service import start_scheduler
+        start_scheduler()
+        logger.info("✅ Reminder scheduler started")
+    except Exception as e:
+        logger.warning(f"⚠️  Reminder scheduler failed to start: {e}")
+    
     logger.info("✅ Application started successfully")
     logger.info("ℹ️  Using YOLO + rule-based lesion analysis")
 
 @app.on_event("shutdown")
 async def shutdown_db_client():
+    # Shutdown reminder scheduler
+    try:
+        from services.reminder_service import shutdown_scheduler
+        shutdown_scheduler()
+    except Exception as e:
+        logger.warning(f"⚠️  Error shutting down scheduler: {e}")
+    
     client.close()

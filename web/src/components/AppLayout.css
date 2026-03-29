@@ -1,0 +1,165 @@
+.app-shell {
+  min-height: 100vh;
+  display: flex;
+  --sidebar-bg: #111827;
+  --sidebar-border: #374151;
+  --sidebar-text: #f9fafb;
+  --sidebar-subtext: #9ca3af;
+  --nav-hover-bg: #1f2937;
+  --nav-active-bg: #374151;
+  --nav-active-text: #ffffff;
+  --logout-bg: #ef4444;
+  --content-bg: #f5f5f5;
+}
+
+.app-sidebar {
+  width: 260px;
+  background: var(--sidebar-bg);
+  color: var(--sidebar-text);
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  padding: 24px 16px;
+  z-index: 30;
+}
+
+.app-brand h2 {
+  font-size: 22px;
+  margin-bottom: 4px;
+}
+
+.app-brand p {
+  font-size: 12px;
+  color: var(--sidebar-subtext);
+  letter-spacing: 1px;
+}
+
+.app-nav {
+  margin-top: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.app-nav-link {
+  color: #d1d5db;
+  text-decoration: none;
+  padding: 10px 12px;
+  border-radius: 8px;
+  transition: background-color 0.15s ease;
+}
+
+.app-nav-link:hover {
+  background: var(--nav-hover-bg);
+}
+
+.app-nav-link.active {
+  background: var(--nav-active-bg);
+  color: var(--nav-active-text);
+}
+
+.app-sidebar-footer {
+  border-top: 1px solid var(--sidebar-border);
+  padding-top: 16px;
+}
+
+.app-user-meta {
+  display: flex;
+  flex-direction: column;
+  margin-bottom: 12px;
+}
+
+.app-user-meta strong {
+  font-size: 14px;
+}
+
+.app-user-meta span {
+  font-size: 12px;
+  color: var(--sidebar-subtext);
+}
+
+.app-logout-button {
+  width: 100%;
+  border: 0;
+  border-radius: 8px;
+  padding: 10px 12px;
+  cursor: pointer;
+  background: var(--logout-bg);
+  color: #fff;
+  font-weight: 600;
+}
+
+.app-main-content {
+  flex: 1;
+  min-width: 0;
+  background: var(--content-bg);
+}
+
+.app-container {
+  padding: 16px;
+}
+
+.app-mobile-toggle {
+  position: sticky;
+  top: 0;
+  z-index: 40;
+  width: 100%;
+  text-align: left;
+  padding: 12px 16px;
+}
+
+.app-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.45);
+  z-index: 20;
+}
+
+.app-shell.role-admin {
+  --sidebar-bg: #0b2545;
+  --sidebar-border: #1d3a5f;
+  --sidebar-text: #eff6ff;
+  --sidebar-subtext: #bfd4ff;
+  --nav-hover-bg: #12345d;
+  --nav-active-bg: #1f4f88;
+  --nav-active-text: #ffffff;
+  --logout-bg: #dc2626;
+  --content-bg: #f3f7ff;
+}
+
+.app-shell.role-doctor {
+  --sidebar-bg: #0f2f2d;
+  --sidebar-border: #26534f;
+  --sidebar-text: #ecfeff;
+  --sidebar-subtext: #99d8d2;
+  --nav-hover-bg: #16453f;
+  --nav-active-bg: #0f766e;
+  --nav-active-text: #ffffff;
+  --logout-bg: #dc2626;
+  --content-bg: #f4fbf9;
+}
+
+@media (max-width: 900px) {
+  .app-shell {
+    flex-direction: column;
+  }
+
+  .app-sidebar {
+    width: 85%;
+    max-width: 320px;
+    position: fixed;
+    left: 0;
+    top: 0;
+    bottom: 0;
+    transform: translateX(-100%);
+    transition: transform 0.2s ease;
+  }
+
+  .app-sidebar.open {
+    transform: translateX(0);
+  }
+
+  .app-container {
+    padding: 12px;
+  }
+}

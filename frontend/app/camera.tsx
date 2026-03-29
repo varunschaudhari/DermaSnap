@@ -8,6 +8,8 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as ImagePicker from 'expo-image-picker';
 import * as FileSystem from 'expo-file-system';
 import * as ImageManipulator from 'expo-image-manipulator';
+import { validateImageQuality, getQualityStatusColor, getQualityStatusIcon } from '../utils/imageQuality';
+import { authService } from '../services/auth';
 
 const { width, height } = Dimensions.get('window');
 
@@ -20,6 +22,10 @@ export default function CameraScreen() {
   const [facing, setFacing] = useState<'front' | 'back'>('front');
   const [isCapturing, setIsCapturing] = useState(false);
   const [isCameraReady, setIsCameraReady] = useState(false);
+  const [qualityStatus, setQualityStatus] = useState<'excellent' | 'good' | 'fair' | 'poor' | null>(null);
+  const [qualityScore, setQualityScore] = useState<number | null>(null);
+  const [roiSelection, setRoiSelection] = useState<{ x: number; y: number; width: number; height: number } | null>(null);
+  const [isSelectingROI, setIsSelectingROI] = useState(false);
   const cameraRef = useRef<any>(null);
 
   useEffect(() => {
@@ -81,6 +87,7 @@ export default function CameraScreen() {
         base64: imageBase64,
         analysisType: normalizedType,
         timestamp: new Date().toISOString(),
+        roi: roiSelection, // Include ROI coordinates if selected
       }));
 
       console.log('Navigating to processing...');
@@ -137,6 +144,31 @@ export default function CameraScreen() {
       );
 
       console.log('Cropped image size:', cropped.width, 'x', cropped.height);
+      
+      // Validate image quality
+      if (cropped.base64) {
+        try {
+          const qualityResult = await validateImageQuality(cropped.base64);
+          setQualityScore(qualityResult.overall_score);
+          setQualityStatus(qualityResult.overall_status as any);
+          
+          if (!qualityResult.is_acceptable) {
+            Alert.alert(
+              'Image Quality Warning',
+              `Image quality is ${qualityResult.overall_status}. ${qualityResult.recommendations.join(' ')}`,
+              [
+                { text: 'Retake', style: 'cancel', onPress: () => setIsCapturing(false) },
+                { text: 'Continue Anyway', onPress: () => processImage(cropped.uri, cropped.base64 || null) },
+              ]
+            );
+            return;
+          }
+        } catch (error) {
+          console.warn('Quality validation failed:', error);
+          // Continue with processing if validation fails
+        }
+      }
+      
       await processImage(cropped.uri, cropped.base64 || null);
       
     } catch (error) {
@@ -290,6 +322,28 @@ export default function CameraScreen() {
             <Text style={styles.instructionText}>Keep neutral expression</Text>
           </View>
         </View>
+      </View>
+
+      {/* ROI Selection Mode Toggle */}
+      <View style={styles.roiToggleContainer}>
+        <TouchableOpacity
+          style={[styles.roiToggle, isSelectingROI && styles.roiToggleActive]}
+          onPress={() => setIsSelectingROI(!isSelectingROI)}
+        >
+          <Ionicons name="crop" size={20} color={isSelectingROI ? "#FFFFFF" : "#00B894"} />
+          <Text style={[styles.roiToggleText, isSelectingROI && styles.roiToggleTextActive]}>
+            {isSelectingROI ? 'ROI Mode' : 'Select Region'}
+          </Text>
+        </TouchableOpacity>
+        {roiSelection && (
+          <TouchableOpacity
+            style={styles.clearRoiButton}
+            onPress={() => setRoiSelection(null)}
+          >
+            <Ionicons name="close-circle" size={20} color="#FF6B6B" />
+            <Text style={styles.clearRoiText}>Clear</Text>
+          </TouchableOpacity>
+        )}
       </View>
 
       {/* Controls */}
@@ -515,5 +569,50 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '600',
     marginTop: 12,
+  },
+  roiToggleContainer: {
+    position: 'absolute',
+    bottom: 250,
+    left: 20,
+    right: 20,
+    flexDirection: 'row',
+    gap: 12,
+    alignItems: 'center',
+  },
+  roiToggle: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: 'rgba(255, 255, 255, 0.95)',
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 20,
+    borderWidth: 2,
+    borderColor: '#00B894',
+  },
+  roiToggleActive: {
+    backgroundColor: '#00B894',
+  },
+  roiToggleText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#00B894',
+  },
+  roiToggleTextActive: {
+    color: '#FFFFFF',
+  },
+  clearRoiButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: 'rgba(255, 255, 255, 0.95)',
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    borderRadius: 20,
+  },
+  clearRoiText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#FF6B6B',
   },
 });

@@ -1,0 +1,210 @@
+.patient-detail {
+  min-height: 100vh;
+  background: #f5f5f5;
+}
+
+.detail-header {
+  background: linear-gradient(135deg, #00B894 0%, #00CEC9 100%);
+  color: white;
+  padding: 24px 32px;
+}
+
+.back-button {
+  background: rgba(255, 255, 255, 0.2);
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  color: white;
+  padding: 8px 16px;
+  border-radius: 8px;
+  cursor: pointer;
+  margin-bottom: 16px;
+  font-weight: 600;
+}
+
+.detail-header h1 {
+  font-size: 28px;
+}
+
+.detail-content {
+  padding: 32px;
+  max-width: 1200px;
+  margin: 0 auto;
+}
+
+.info-section,
+.scans-section,
+.treatments-section {
+  margin-bottom: 32px;
+}
+
+.info-section h2,
+.scans-section h2,
+.treatments-section h2 {
+  font-size: 24px;
+  margin-bottom: 16px;
+  color: #2D3436;
+}
+
+.info-card {
+  background: white;
+  padding: 24px;
+  border-radius: 12px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.info-card p {
+  margin-bottom: 12px;
+  font-size: 16px;
+}
+
+.scans-list,
+.treatments-list {
+  display: grid;
+  gap: 16px;
+}
+
+.scan-card,
+.treatment-card {
+  background: white;
+  padding: 20px;
+  border-radius: 12px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.scan-card {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  cursor: pointer;
+  transition: transform 0.2s;
+}
+
+.scan-card:hover {
+  transform: translateX(4px);
+}
+
+.treatment-card h3 {
+  font-size: 18px;
+  color: #00B894;
+  margin-bottom: 12px;
+}
+
+.treatment-card p {
+  margin-bottom: 8px;
+  color: #636E72;
+}
+
+.empty-state {
+  background: white;
+  padding: 40px;
+  border-radius: 12px;
+  text-align: center;
+  color: #636E72;
+}
+
+.add-button {
+  background: #00B894;
+  color: white;
+  border: none;
+  padding: 10px 20px;
+  border-radius: 8px;
+  cursor: pointer;
+  font-weight: 600;
+  font-size: 14px;
+}
+
+.add-button:hover {
+  background: #00A085;
+}
+
+.modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+.modal-content {
+  background: white;
+  border-radius: 16px;
+  padding: 32px;
+  width: 90%;
+  max-width: 500px;
+  max-height: 90vh;
+  overflow-y: auto;
+}
+
+.modal-content h2 {
+  margin-bottom: 24px;
+  color: #2D3436;
+}
+
+.form-group {
+  margin-bottom: 20px;
+}
+
+.form-group label {
+  display: block;
+  margin-bottom: 8px;
+  color: #2D3436;
+  font-weight: 600;
+  font-size: 14px;
+}
+
+.form-group input,
+.form-group select,
+.form-group textarea {
+  width: 100%;
+  padding: 12px;
+  border: 2px solid #E8F8F5;
+  border-radius: 8px;
+  font-size: 14px;
+  font-family: inherit;
+}
+
+.form-group input:focus,
+.form-group select:focus,
+.form-group textarea:focus {
+  outline: none;
+  border-color: #00B894;
+}
+
+.modal-buttons {
+  display: flex;
+  gap: 12px;
+  margin-top: 24px;
+}
+
+.cancel-button,
+.save-button {
+  flex: 1;
+  padding: 12px;
+  border: none;
+  border-radius: 8px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.cancel-button {
+  background: #E8F8F5;
+  color: #00B894;
+}
+
+.save-button {
+  background: #00B894;
+  color: white;
+}
+
+.save-button:hover:not(:disabled) {
+  background: #00A085;
+}
+
+.save-button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}

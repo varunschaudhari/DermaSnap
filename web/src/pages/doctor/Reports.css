@@ -1,0 +1,203 @@
+.reports-page {
+  min-height: 100vh;
+  background: #f5f5f5;
+}
+
+.reports-header {
+  background: linear-gradient(135deg, #00B894 0%, #00CEC9 100%);
+  color: white;
+  padding: 24px 32px;
+}
+
+.back-button {
+  background: rgba(255, 255, 255, 0.2);
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  color: white;
+  padding: 8px 16px;
+  border-radius: 8px;
+  cursor: pointer;
+  margin-bottom: 16px;
+  font-weight: 600;
+}
+
+.reports-header h1 {
+  font-size: 28px;
+}
+
+.reports-content {
+  padding: 32px;
+  max-width: 1400px;
+  margin: 0 auto;
+}
+
+.reports-controls {
+  background: white;
+  padding: 24px;
+  border-radius: 12px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  margin-bottom: 24px;
+  display: flex;
+  gap: 24px;
+  align-items: flex-end;
+  flex-wrap: wrap;
+}
+
+.control-group {
+  flex: 1;
+  min-width: 200px;
+}
+
+.control-group label {
+  display: block;
+  margin-bottom: 8px;
+  color: #2D3436;
+  font-weight: 600;
+  font-size: 14px;
+}
+
+.patient-select {
+  width: 100%;
+  padding: 12px;
+  border: 2px solid #E8F8F5;
+  border-radius: 8px;
+  font-size: 14px;
+}
+
+.radio-group {
+  display: flex;
+  gap: 16px;
+}
+
+.radio-group label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  font-weight: normal;
+}
+
+.export-button {
+  background: #00B894;
+  color: white;
+  border: none;
+  padding: 12px 24px;
+  border-radius: 8px;
+  cursor: pointer;
+  font-weight: 600;
+  font-size: 14px;
+}
+
+.export-button:hover {
+  background: #00A085;
+}
+
+.reports-data {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+.report-summary {
+  background: white;
+  padding: 24px;
+  border-radius: 12px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.report-summary h2 {
+  font-size: 20px;
+  margin-bottom: 16px;
+  color: #2D3436;
+}
+
+.summary-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 16px;
+}
+
+.summary-card {
+  background: #F7FFFE;
+  padding: 20px;
+  border-radius: 8px;
+  border: 2px solid #E8F8F5;
+}
+
+.summary-card h3 {
+  font-size: 14px;
+  color: #636E72;
+  margin-bottom: 8px;
+  font-weight: 600;
+}
+
+.summary-value {
+  font-size: 24px;
+  font-weight: 700;
+  color: #00B894;
+}
+
+.report-charts {
+  background: white;
+  padding: 24px;
+  border-radius: 12px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.report-charts h2 {
+  font-size: 20px;
+  margin-bottom: 16px;
+  color: #2D3436;
+}
+
+.chart-container {
+  margin-top: 24px;
+}
+
+.report-details {
+  background: white;
+  padding: 24px;
+  border-radius: 12px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.report-details h2 {
+  font-size: 20px;
+  margin-bottom: 16px;
+  color: #2D3436;
+}
+
+.scans-table {
+  overflow-x: auto;
+}
+
+.scans-table table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.scans-table th {
+  background: #00B894;
+  color: white;
+  padding: 12px;
+  text-align: left;
+  font-weight: 600;
+  font-size: 14px;
+}
+
+.scans-table td {
+  padding: 12px;
+  border-bottom: 1px solid #E8F8F5;
+  font-size: 14px;
+}
+
+.scans-table tr:hover {
+  background: #F7FFFE;
+}
+
+.empty-state {
+  background: white;
+  padding: 40px;
+  border-radius: 12px;
+  text-align: center;
+  color: #636E72;
+}

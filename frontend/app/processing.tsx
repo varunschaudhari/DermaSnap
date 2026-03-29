@@ -214,7 +214,8 @@ export default function ProcessingScreen() {
       // PRIMARY: Save full data to backend database (with imageBase64)
       // Images are now stored in database, not local storage
       try {
-        const response = await fetch(`${BACKEND_URL}/api/scans`, {
+        const token = await authService.getAccessToken();
+        const response = await authService.authenticatedFetch(`${BACKEND_URL}/api/scans`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
@@ -293,7 +294,7 @@ export default function ProcessingScreen() {
         await new Promise(resolve => setTimeout(resolve, 1000));
         
         try {
-          const retryResponse = await fetch(`${BACKEND_URL}/api/scans`, {
+          const retryResponse = await authService.authenticatedFetch(`${BACKEND_URL}/api/scans`, {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',

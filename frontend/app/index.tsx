@@ -4,6 +4,7 @@ import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { LinearGradient } from 'expo-linear-gradient';
+import { useAuth } from '../contexts/AuthContext';
 
 const { width } = Dimensions.get('window');
 
@@ -16,14 +17,25 @@ interface Profile {
 
 export default function HomeScreen() {
   const router = useRouter();
+  const { user, isLoading: authLoading } = useAuth();
   const [showDisclaimer, setShowDisclaimer] = useState(true);
   const [disclaimerAccepted, setDisclaimerAccepted] = useState(false);
   const [activeProfile, setActiveProfile] = useState<Profile | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    initializeApp();
-  }, []);
+    if (!authLoading) {
+      if (!user) {
+        router.replace('/auth/login');
+        return;
+      }
+      if (user.role !== 'patient') {
+        // Redirect doctors/admins to web dashboard
+        return;
+      }
+      initializeApp();
+    }
+  }, [authLoading, user]);
 
   const initializeApp = async () => {
     await checkProfile();
@@ -258,6 +270,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     width: '100%',
     marginBottom: 20,
+  },
+  headerIcons: {
+    flexDirection: 'row',
+    gap: 12,
   },
   profileBadge: {
     flexDirection: 'row',

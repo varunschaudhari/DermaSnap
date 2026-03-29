@@ -7,6 +7,10 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { format } from 'date-fns';
 import * as Notifications from 'expo-notifications';
 import Constants from 'expo-constants';
+import { useAuth } from '../contexts/AuthContext';
+import { authService } from '../services/auth';
+import { BACKEND_URL } from '../config/api';
+import { notificationService } from '../services/notifications';
 
 interface Treatment {
   id: string;
@@ -84,10 +88,32 @@ export default function TreatmentsScreen() {
       if (profileData) {
         const profile = JSON.parse(profileData);
         setActiveProfile(profile);
-        
-        const treatmentsData = await AsyncStorage.getItem(`treatments_${profile.id}`);
-        if (treatmentsData) {
-          setTreatments(JSON.parse(treatmentsData));
+      }
+      
+      // Load from backend API
+      try {
+        const response = await authService.authenticatedFetch(`${BACKEND_URL}/api/treatments`);
+        if (response.ok) {
+          const backendTreatments = await response.json();
+          setTreatments(backendTreatments.map((t: any) => ({
+            id: t.id,
+            productName: t.product_name,
+            frequency: t.frequency,
+            startDate: t.start_date,
+            endDate: t.end_date,
+            notes: t.notes || '',
+            reminderEnabled: !!t.reminder_date,
+            reminderTime: t.reminder_time || '09:00',
+          })));
+        }
+      } catch (error) {
+        console.warn('Failed to load from backend, using local storage:', error);
+        // Fallback to local storage
+        if (activeProfile) {
+          const treatmentsData = await AsyncStorage.getItem(`treatments_${activeProfile.id}`);
+          if (treatmentsData) {
+            setTreatments(JSON.parse(treatmentsData));
+          }
         }
       }
     } catch (error) {
@@ -133,38 +159,59 @@ export default function TreatmentsScreen() {
       return;
     }
 
-    if (!activeProfile) return;
+    if (!user) {
+      Alert.alert('Error', 'Please login to add treatments');
+      return;
+    }
 
-    const newTreatment: Treatment = {
-      id: Date.now().toString(),
-      productName: productName.trim(),
-      frequency,
-      startDate: new Date().toISOString(),
-      notes: notes.trim(),
-      reminderEnabled,
-      reminderTime: reminderEnabled ? reminderTime : undefined,
-    };
+    try {
+      // Create treatment via backend API
+      const response = await authService.authenticatedFetch(`${BACKEND_URL}/api/treatments`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          product_name: productName.trim(),
+          frequency,
+          duration_days: parseInt(durationDays) || 30,
+          notes: notes.trim(),
+          patient_id: user.id,
+          reminder_days_before: reminderEnabled ? 3 : 0,
+        }),
+      });
 
-    const updatedTreatments = [newTreatment, ...treatments];
-    await AsyncStorage.setItem(`treatments_${activeProfile.id}`, JSON.stringify(updatedTreatments));
-    setTreatments(updatedTreatments);
-
-    // Schedule notification if enabled
-    if (reminderEnabled) {
-      if (notificationsAvailable) {
-        await scheduleNotification(newTreatment);
-        Alert.alert('Success', 'Treatment added and reminder scheduled!');
+      if (response.ok) {
+        const result = await response.json();
+        Alert.alert('Success', 'Treatment plan created successfully!');
+        
+        // Reload treatments
+        await loadData();
+        
+        // Schedule notification if enabled
+        if (reminderEnabled) {
+          await notificationService.initialize();
+          const treatmentData = {
+            treatmentId: result.id,
+            patientId: user.id,
+            message: `Time to apply ${productName.trim()}`,
+            reminderDate: new Date(Date.now() + (parseInt(durationDays) - 3) * 24 * 60 * 60 * 1000),
+          };
+          await notificationService.scheduleTreatmentReminder(treatmentData);
+        }
       } else {
-        Alert.alert('Success', 'Treatment added! (Reminders not available in Expo Go)');
+        const error = await response.json();
+        Alert.alert('Error', error.detail || 'Failed to create treatment');
       }
-    } else {
-      Alert.alert('Success', 'Treatment added successfully!');
+    } catch (error: any) {
+      Alert.alert('Error', error.message || 'Failed to create treatment');
     }
 
     // Reset form
     setProductName('');
     setFrequency('Once Daily');
     setNotes('');
+    setDurationDays('30');
     setReminderEnabled(false);
     setReminderTime('09:00');
     setShowAddModal(false);
@@ -272,6 +319,16 @@ export default function TreatmentsScreen() {
                 </TouchableOpacity>
               ))}
             </View>
+
+            <Text style={styles.label}>Duration (days)</Text>
+            <TextInput
+              style={styles.input}
+              placeholder="30"
+              placeholderTextColor="#95A5A6"
+              value={durationDays}
+              onChangeText={setDurationDays}
+              keyboardType="numeric"
+            />
 
             <TextInput
               style={[styles.input, styles.textArea]}

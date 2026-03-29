@@ -309,7 +309,11 @@ export default function ProgressScreen() {
             {scans.length >= 2 && (
               <TouchableOpacity
                 style={styles.compareButton}
-                onPress={() => router.push('/compare')}
+                onPress={() => {
+                  const scan1 = scans[scans.length - 1];
+                  const scan2 = scans[0];
+                  router.push(`/comparison?scanId1=${scan1._id || scan1.id}&scanId2=${scan2._id || scan2.id}`);
+                }}
               >
                 <Ionicons name="git-compare" size={20} color="#FFFFFF" />
                 <Text style={styles.compareButtonText}>Compare Scans</Text>
