@@ -1,7 +1,7 @@
 /**
  * Registration screen
  */
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import {
   View,
   Text,
@@ -19,6 +19,8 @@ import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useAuth } from '../../contexts/AuthContext';
+import DateTimePicker, { DateTimePickerEvent } from '@react-native-community/datetimepicker';
+import { Picker } from '@react-native-picker/picker';
 
 export default function RegisterScreen() {
   const router = useRouter();
@@ -29,9 +31,30 @@ export default function RegisterScreen() {
   const [role, setRole] = useState<'patient' | 'doctor' | 'admin'>('patient');
   const [mobile, setMobile] = useState('');
   const [dob, setDob] = useState(''); // YYYY-MM-DD
-  const [gender, setGender] = useState('');
+  const [gender, setGender] = useState<'male' | 'female' | 'other' | 'prefer_not_to_say' | ''>('');
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
+  const [showDobPicker, setShowDobPicker] = useState(false);
+
+  const dobDate = useMemo(() => {
+    if (!dob) return undefined;
+    const d = new Date(dob);
+    return Number.isNaN(d.getTime()) ? undefined : d;
+  }, [dob]);
+
+  const formatDateYmd = (date: Date) => {
+    const yyyy = date.getFullYear();
+    const mm = String(date.getMonth() + 1).padStart(2, '0');
+    const dd = String(date.getDate()).padStart(2, '0');
+    return `${yyyy}-${mm}-${dd}`;
+  };
+
+  const onDobChange = (event: DateTimePickerEvent, selected?: Date) => {
+    // Android fires 'dismissed' when user cancels; iOS keeps it open unless we hide it ourselves.
+    if (Platform.OS === 'android') setShowDobPicker(false);
+    if (event.type !== 'set' || !selected) return;
+    setDob(formatDateYmd(selected));
+  };
 
   const handleRegister = async () => {
     if (!email || !password || !fullName) {
@@ -145,27 +168,44 @@ export default function RegisterScreen() {
             <View style={styles.row}>
               <View style={[styles.inputContainer, styles.half]}>
                 <Ionicons name="calendar-outline" size={20} color="#636E72" style={styles.inputIcon} />
-                <TextInput
-                  style={styles.input}
-                  placeholder="DOB (YYYY-MM-DD)"
-                  placeholderTextColor="#95A5A6"
-                  value={dob}
-                  onChangeText={setDob}
-                  inputMode="numeric"
-                />
+                <TouchableOpacity
+                  style={styles.pressableInput}
+                  onPress={() => setShowDobPicker(true)}
+                  activeOpacity={0.8}
+                >
+                  <Text style={[styles.pressableText, !dob && styles.pressablePlaceholder]}>
+                    {dob || 'Date of Birth'}
+                  </Text>
+                </TouchableOpacity>
               </View>
               <View style={[styles.inputContainer, styles.half]}>
                 <Ionicons name="male-female-outline" size={20} color="#636E72" style={styles.inputIcon} />
-                <TextInput
-                  style={styles.input}
-                  placeholder="Gender"
-                  placeholderTextColor="#95A5A6"
-                  value={gender}
-                  onChangeText={setGender}
-                  autoCapitalize="none"
-                />
+                <View style={styles.pickerContainer}>
+                  <Picker
+                    selectedValue={gender}
+                    onValueChange={(value) => setGender(value)}
+                    style={styles.picker}
+                    dropdownIconColor="#636E72"
+                  >
+                    <Picker.Item label="Gender" value="" color="#95A5A6" />
+                    <Picker.Item label="Male" value="male" />
+                    <Picker.Item label="Female" value="female" />
+                    <Picker.Item label="Other" value="other" />
+                    <Picker.Item label="Prefer not to say" value="prefer_not_to_say" />
+                  </Picker>
+                </View>
               </View>
             </View>
+
+            {showDobPicker && (
+              <DateTimePicker
+                value={dobDate ?? new Date(2000, 0, 1)}
+                mode="date"
+                display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+                onChange={onDobChange}
+                maximumDate={new Date()}
+              />
+            )}
 
             {/* Keep role to patient for mobile by default; can expose toggles later if needed */}
 
@@ -249,6 +289,27 @@ const styles = StyleSheet.create({
   input: {
     flex: 1,
     fontSize: 16,
+    color: '#2D3436',
+  },
+  pressableInput: {
+    flex: 1,
+    justifyContent: 'center',
+    height: '100%',
+  },
+  pressableText: {
+    fontSize: 16,
+    color: '#2D3436',
+  },
+  pressablePlaceholder: {
+    color: '#95A5A6',
+  },
+  pickerContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    height: '100%',
+  },
+  picker: {
+    flex: 1,
     color: '#2D3436',
   },
   eyeIcon: {

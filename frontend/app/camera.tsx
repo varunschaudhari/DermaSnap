@@ -15,7 +15,7 @@ const { width, height } = Dimensions.get('window');
 
 export default function CameraScreen() {
   const router = useRouter();
-  const { type } = useLocalSearchParams();
+  const { type, source } = useLocalSearchParams();
   const normalizedType = type === 'acne' || type === 'pigmentation' || type === 'wrinkles' ? type : 'acne';
   const [permission, requestPermission] = useCameraPermissions();
   const [mediaPermission, requestMediaPermission] = ImagePicker.useMediaLibraryPermissions();
@@ -40,6 +40,22 @@ export default function CameraScreen() {
       requestMediaPermission();
     }
   }, [mediaPermission]);
+
+  // If launched from dashboard with source=gallery, open gallery automatically once permission is ready.
+  useEffect(() => {
+    const wantsGallery = source === 'gallery';
+    if (!wantsGallery) return;
+    if (!mediaPermission) return;
+    if (!mediaPermission.granted) return;
+
+    // Defer a tick so the screen can mount before opening the picker.
+    const t = setTimeout(() => {
+      pickImageFromGallery();
+    }, 250);
+
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [source, mediaPermission?.granted]);
 
   if (!permission) {
     return (

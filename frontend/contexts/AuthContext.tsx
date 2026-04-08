@@ -3,6 +3,7 @@
  */
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { authService, User } from '../services/auth';
+import { BACKEND_URL } from '../config/api';
 
 interface AuthContextType {
   user: User | null;
@@ -60,7 +61,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         // Verify token is still valid by fetching user info
         try {
           const token = await authService.getAccessToken();
-          const response = await fetch(`${process.env.EXPO_PUBLIC_BACKEND_URL || 'http://localhost:8001'}/api/auth/me`, {
+          const response = await fetch(`${BACKEND_URL}/api/auth/me`, {
             headers: {
               'Authorization': `Bearer ${token}`,
             },
@@ -68,7 +69,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
           
           if (response.ok) {
             const userData = await response.json();
-            setUser(userData);
+            setUser(userData as unknown as User);
           } else {
             // Token invalid, clear user
             await authService.logout();

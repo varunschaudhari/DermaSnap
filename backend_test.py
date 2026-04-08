@@ -7,16 +7,26 @@ Tests all backend endpoints for the skin analysis application
 import requests
 import json
 import time
+import os
 from datetime import datetime
 from typing import Dict, Any, List
 
 # Configuration
-BACKEND_URL = "https://acne-tracker-2.preview.emergentagent.com/api"
+DEFAULT_BACKEND_URL = "https://dermasnap.onrender.com"
+# Allow overriding the backend during CI/local runs.
+# Example: set BACKEND_URL=https://dermasnap.onrender.com
+API_BASE_URL = os.environ.get("BACKEND_URL", DEFAULT_BACKEND_URL).rstrip("/")
+# If someone passes an env var that already includes `/api`, normalize it.
+if API_BASE_URL.lower().endswith("/api"):
+    API_BASE_URL = API_BASE_URL[:-4]
+# Most test routes below assume `base_url` already includes `/api`.
+BACKEND_URL = f"{API_BASE_URL}/api"
 TIMEOUT = 30
 
 class SkinQuantAPITester:
     def __init__(self):
         self.base_url = BACKEND_URL
+        self.api_base_url = API_BASE_URL
         self.session = requests.Session()
         self.test_results = []
         self.created_scan_ids = []
@@ -102,7 +112,7 @@ class SkinQuantAPITester:
     def test_root_endpoint(self):
         """Test the root API endpoint"""
         try:
-            response = self.session.get(f"{self.base_url}/", timeout=TIMEOUT)
+            response = self.session.get(f"{self.api_base_url}/", timeout=TIMEOUT)
             if response.status_code == 200:
                 data = response.json()
                 if "message" in data and "SkinQuant AI API" in data["message"]:

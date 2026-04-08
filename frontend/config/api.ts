@@ -3,10 +3,13 @@
  * Centralized configuration for backend API calls
  */
 
-// Backend URL (directly assigned for all builds)
-export const BACKEND_URL = 'https://dermasnap.onrender.com';
+// Backend URL
+// - Prefer EXPO_PUBLIC_BACKEND_URL when provided (works for local/LAN backends and per-build overrides)
+// - Fall back to the hosted backend
+export const BACKEND_URL =
+  process.env.EXPO_PUBLIC_BACKEND_URL?.trim() || 'https://dermasnap.onrender.com';
 
-// Production backend URL
+// Production backend URL (kept for compatibility)
 export const PRODUCTION_BACKEND_URL = 'https://dermasnap.onrender.com';
 
 // API Endpoints

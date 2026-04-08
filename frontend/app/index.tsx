@@ -22,6 +22,8 @@ export default function HomeScreen() {
   const [disclaimerAccepted, setDisclaimerAccepted] = useState(false);
   const [activeProfile, setActiveProfile] = useState<Profile | null>(null);
   const [loading, setLoading] = useState(true);
+  const [selectedAnalysisType, setSelectedAnalysisType] = useState<'acne' | 'pigmentation' | 'wrinkles' | null>(null);
+  const [showSourceModal, setShowSourceModal] = useState(false);
 
   useEffect(() => {
     if (!authLoading) {
@@ -29,29 +31,56 @@ export default function HomeScreen() {
         router.replace('/auth/login');
         return;
       }
-      if (user.role !== 'patient') {
-        // Redirect doctors/admins to web dashboard
+      if (user.role === 'doctor') {
+        router.replace('/doctor');
         return;
       }
+      if (user.role === 'admin') {
+        router.replace('/admin');
+        return;
+      }
+      // Patient flow
       initializeApp();
     }
   }, [authLoading, user]);
 
   const initializeApp = async () => {
-    await checkProfile();
+    await ensureActiveProfile();
     await checkDisclaimerStatus();
     setLoading(false);
   };
 
-  const checkProfile = async () => {
+  const ensureActiveProfile = async () => {
     try {
       const profileData = await AsyncStorage.getItem('active_profile');
-      if (!profileData) {
-        // No active profile, redirect to profile selection
-        router.replace('/profiles');
+      if (profileData) {
+        setActiveProfile(JSON.parse(profileData));
         return;
       }
-      setActiveProfile(JSON.parse(profileData));
+
+      // No profile selected/created yet: create one automatically from logged-in user.
+      // This removes the need for the profile selection screen in the patient app,
+      // while keeping existing storage keys (skin_scans_{profileId}, treatments_{profileId}, etc.) intact.
+      const autoProfile: Profile = {
+        id: user?.id || 'default',
+        name: user?.full_name || 'Patient',
+      };
+
+      await AsyncStorage.setItem('active_profile', JSON.stringify(autoProfile));
+
+      // Also keep it in the profiles list for compatibility (optional).
+      const storedProfiles = await AsyncStorage.getItem('user_profiles');
+      const profiles: any[] = storedProfiles ? JSON.parse(storedProfiles) : [];
+      const alreadyExists = profiles.some((p: any) => p?.id === autoProfile.id);
+      if (!alreadyExists) {
+        profiles.unshift({
+          ...autoProfile,
+          createdAt: new Date().toISOString(),
+        });
+        await AsyncStorage.setItem('user_profiles', JSON.stringify(profiles));
+      }
+
+      setActiveProfile(autoProfile);
     } catch (error) {
       console.error('Error checking profile:', error);
     }
@@ -84,11 +113,21 @@ export default function HomeScreen() {
       setShowDisclaimer(true);
       return;
     }
-    router.push(`/camera?type=${type}`);
+    const normalized = type === 'acne' || type === 'pigmentation' || type === 'wrinkles' ? type : 'acne';
+    setSelectedAnalysisType(normalized);
+    setShowSourceModal(true);
   };
 
-  const switchProfile = () => {
-    router.push('/profiles');
+  const startScan = (source: 'camera' | 'gallery') => {
+    if (!disclaimerAccepted) {
+      setShowDisclaimer(true);
+      return;
+    }
+    if (!selectedAnalysisType) return;
+
+    setShowSourceModal(false);
+    const srcParam = source === 'gallery' ? '&source=gallery' : '';
+    router.push(`/camera?type=${selectedAnalysisType}${srcParam}`);
   };
 
   if (loading) {
@@ -99,9 +138,7 @@ export default function HomeScreen() {
     );
   }
 
-  if (!activeProfile) {
-    return null; // Will redirect in useEffect
-  }
+  if (!activeProfile) return null;
 
   return (
     <View style={styles.container}>
@@ -143,6 +180,50 @@ export default function HomeScreen() {
               onPress={acceptDisclaimer}
             >
               <Text style={styles.acceptButtonText}>I Understand & Accept</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Source selection (after analysis type chosen) */}
+      <Modal
+        visible={showSourceModal}
+        animationType="fade"
+        transparent={true}
+        onRequestClose={() => setShowSourceModal(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.sourceModalContent}>
+            <Text style={styles.sourceModalTitle}>Select Image Source</Text>
+            <Text style={styles.sourceModalSubtitle}>
+              {selectedAnalysisType ? `For ${selectedAnalysisType} analysis` : ''}
+            </Text>
+
+            <View style={styles.sourceButtonsRow}>
+              <TouchableOpacity
+                style={styles.sourceButtonPrimary}
+                onPress={() => startScan('camera')}
+                activeOpacity={0.9}
+              >
+                <Ionicons name="camera" size={20} color="#FFFFFF" />
+                <Text style={styles.sourceButtonPrimaryText}>Take Photo</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={styles.sourceButtonSecondary}
+                onPress={() => startScan('gallery')}
+                activeOpacity={0.9}
+              >
+                <Ionicons name="images" size={20} color="#00B894" />
+                <Text style={styles.sourceButtonSecondaryText}>Choose Image</Text>
+              </TouchableOpacity>
+            </View>
+
+            <TouchableOpacity
+              style={styles.sourceCancel}
+              onPress={() => setShowSourceModal(false)}
+            >
+              <Text style={styles.sourceCancelText}>Cancel</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -324,6 +405,74 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     padding: 24,
+  },
+  sourceModalContent: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 24,
+    padding: 24,
+    width: '100%',
+    maxWidth: 420,
+  },
+  sourceModalTitle: {
+    fontSize: 20,
+    fontWeight: '800',
+    color: '#2D3436',
+    textAlign: 'center',
+  },
+  sourceModalSubtitle: {
+    fontSize: 13,
+    color: '#636E72',
+    textAlign: 'center',
+    marginTop: 6,
+    marginBottom: 18,
+    fontWeight: '500',
+    textTransform: 'capitalize',
+  },
+  sourceButtonsRow: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  sourceButtonPrimary: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 10,
+    backgroundColor: '#00B894',
+    borderRadius: 16,
+    paddingVertical: 14,
+  },
+  sourceButtonPrimaryText: {
+    color: '#FFFFFF',
+    fontSize: 14,
+    fontWeight: '800',
+  },
+  sourceButtonSecondary: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 10,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    paddingVertical: 14,
+    borderWidth: 1.5,
+    borderColor: '#00B894',
+  },
+  sourceButtonSecondaryText: {
+    color: '#00B894',
+    fontSize: 14,
+    fontWeight: '800',
+  },
+  sourceCancel: {
+    marginTop: 16,
+    paddingVertical: 10,
+    alignItems: 'center',
+  },
+  sourceCancelText: {
+    color: '#636E72',
+    fontSize: 14,
+    fontWeight: '700',
   },
   quickScanButton: {
     borderRadius: 20,

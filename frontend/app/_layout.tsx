@@ -30,6 +30,8 @@ export default function RootLayout() {
         <Stack.Screen name="auth/login" options={{ headerShown: false }} />
         <Stack.Screen name="auth/register" options={{ headerShown: false }} />
         <Stack.Screen name="profiles" options={{ headerShown: false }} />
+        <Stack.Screen name="doctor/index" options={{ headerShown: false }} />
+        <Stack.Screen name="admin/index" options={{ headerShown: false }} />
         <Stack.Screen name="index" options={{ headerShown: false }} />
         <Stack.Screen name="camera" options={{ headerShown: false }} />
         <Stack.Screen name="processing" options={{ headerShown: false }} />
