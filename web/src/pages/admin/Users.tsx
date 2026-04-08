@@ -9,6 +9,7 @@ type AdminUser = {
   full_name: string;
   role: 'patient' | 'doctor' | 'admin';
   is_active: boolean;
+  is_deleted?: boolean;
 };
 
 export default function AdminUsers() {
@@ -31,6 +32,7 @@ export default function AdminUsers() {
     mobile: '',
   });
 
+  const [roleFilter, setRoleFilter] = useState<'' | 'patient' | 'doctor' | 'admin'>('');
   const [showDeleted, setShowDeleted] = useState(false);
   const { data: users, isLoading } = useQuery({
     queryKey: ['admin-users', showDeleted],
@@ -80,18 +82,23 @@ export default function AdminUsers() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['admin-users'] });
       setAddOpen(false);
-      setAddForm({ full_name: '', email: '', role: '', password: '' });
+      setAddForm({ full_name: '', email: '', role: '', password: '', height_cm: '', weight_kg: '', bmi: '', address: '', pincode: '', dob: '', gender: '', mobile: '' });
     },
   });
 
   const filteredUsers = useMemo(() => {
-    const list = Array.isArray(users) ? (users as AdminUser[]) : [];
+    let list = Array.isArray(users) ? (users as AdminUser[]) : [];
     const needle = search.trim().toLowerCase();
-    if (!needle) return list;
-    return list.filter(
-      (u) => u.full_name.toLowerCase().includes(needle) || u.email.toLowerCase().includes(needle)
-    );
-  }, [users, search]);
+    if (needle) {
+      list = list.filter(
+        (u) => u.full_name.toLowerCase().includes(needle) || u.email.toLowerCase().includes(needle)
+      );
+    }
+    if (roleFilter) {
+      list = list.filter((u) => u.role === roleFilter);
+    }
+    return list;
+  }, [users, search, roleFilter]);
 
   return (
     <section className="p-6 lg:p-8">
@@ -106,12 +113,24 @@ export default function AdminUsers() {
       </header>
 
       <div className="mt-5 rounded-xl bg-white p-4 shadow-sm ring-1 ring-slate-200">
-        <input
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          placeholder="Search by name or email"
-          className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none ring-slate-200 focus:ring"
-        />
+        <div className="flex gap-2">
+          <input
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Search by name or email"
+            className="flex-1 rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none ring-slate-200 focus:ring"
+          />
+          <select
+            value={roleFilter}
+            onChange={(e) => setRoleFilter(e.target.value as '' | 'patient' | 'doctor' | 'admin')}
+            className="rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none ring-slate-200 focus:ring"
+          >
+            <option value="">All roles</option>
+            <option value="patient">Patient</option>
+            <option value="doctor">Doctor</option>
+            <option value="admin">Admin</option>
+          </select>
+        </div>
         <div className="mt-3 flex items-center gap-2 text-xs">
           <label className="flex items-center gap-2">
             <input
@@ -369,7 +388,7 @@ export default function AdminUsers() {
               </button>
               <button
                 className="rounded-md bg-slate-900 px-3 py-2 text-xs font-semibold text-white disabled:opacity-50"
-                disabled={!addForm.full_name.trim() || !addForm.email.trim() || !addForm.role.trim() || createUserMutation.isLoading}
+                disabled={!addForm.full_name.trim() || !addForm.email.trim() || !addForm.role.trim() || createUserMutation.isPending}
                 onClick={() => {
                   const payload: any = {
                     full_name: addForm.full_name.trim(),
@@ -390,7 +409,7 @@ export default function AdminUsers() {
                   });
                 }}
               >
-                {createUserMutation.isLoading ? 'Creating...' : 'Create'}
+                {createUserMutation.isPending ? 'Creating...' : 'Create'}
               </button>
             </div>
           </div>
