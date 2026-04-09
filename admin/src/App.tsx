@@ -9,6 +9,8 @@ import AdminDashboard from './pages/admin/Dashboard';
 import AdminUsers from './pages/admin/Users';
 import AdminRoles from './pages/admin/Roles';
 import AdminUserDetail from './pages/admin/UserDetail';
+import AdminRelationships from './pages/admin/Relationships';
+import PatientDashboard from './pages/patient/Dashboard';
 import AppLayout from './components/AppLayout';
 import { AppModule, canAccessModule, getDefaultRouteForRole } from './config/rbac';
 
@@ -137,6 +139,30 @@ function AppRoutes() {
             <ModuleRoute module="adminUsers">
               <AppLayout>
                 <AdminUserDetail />
+              </AppLayout>
+            </ModuleRoute>
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/admin/relationships"
+        element={
+          <ProtectedRoute>
+            <ModuleRoute module="adminRelationships">
+              <AppLayout>
+                <AdminRelationships />
+              </AppLayout>
+            </ModuleRoute>
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/patient"
+        element={
+          <ProtectedRoute>
+            <ModuleRoute module="patientDashboard">
+              <AppLayout>
+                <PatientDashboard />
               </AppLayout>
             </ModuleRoute>
           </ProtectedRoute>

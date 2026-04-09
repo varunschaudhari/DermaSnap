@@ -28,6 +28,43 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/auth", tags=["authentication"])
 
+
+async def auto_assign_doctor(patient_id: str) -> dict:
+    """Assign the doctor with fewest active patients to a new patient."""
+    try:
+        doctors = await db.users.find({"role": "doctor", "is_active": True}).to_list(200)
+        if not doctors:
+            return {"assigned": False, "warning": "No doctors available — patient was created without a doctor assignment."}
+
+        # Pick doctor with fewest active relationships
+        selected_doctor_id = None
+        min_count = float("inf")
+        for doc in doctors:
+            did = str(doc["_id"])
+            count = await db.relationships.count_documents({"doctor_id": did, "status": "active"})
+            if count < min_count:
+                min_count = count
+                selected_doctor_id = did
+
+        if not selected_doctor_id:
+            return {"assigned": False, "warning": "Could not determine a doctor to assign."}
+
+        # Skip if relationship already exists
+        existing = await db.relationships.find_one({"doctor_id": selected_doctor_id, "patient_id": patient_id})
+        if not existing:
+            await db.relationships.insert_one({
+                "doctor_id": selected_doctor_id,
+                "patient_id": patient_id,
+                "status": "active",
+                "created_at": datetime.utcnow(),
+                "updated_at": datetime.utcnow(),
+            })
+
+        return {"assigned": True, "doctor_id": selected_doctor_id, "warning": None}
+    except Exception as e:
+        logger.error(f"auto_assign_doctor error: {e}", exc_info=True)
+        return {"assigned": False, "warning": f"Auto-assign failed: {str(e)}"}
+
 @router.post("/register", response_model=Dict[str, Any])
 async def register(user_data: UserCreate):
     """Register a new user"""
@@ -60,7 +97,13 @@ async def register(user_data: UserCreate):
         
         result = await db.users.insert_one(user_doc)
         user_id = str(result.inserted_id)
-        
+
+        # Auto-assign a doctor for new patients
+        assign_warning = None
+        if user_data.role == "patient":
+            assign_result = await auto_assign_doctor(user_id)
+            assign_warning = assign_result.get("warning")
+
         # Create access token
         access_token = create_access_token(
             data={"sub": user_id, "email": user_data.email, "role": user_data.role}
@@ -68,8 +111,8 @@ async def register(user_data: UserCreate):
         refresh_token = create_refresh_token(
             data={"sub": user_id, "email": user_data.email}
         )
-        
-        return {
+
+        response = {
             "access_token": access_token,
             "refresh_token": refresh_token,
             "token_type": "bearer",
@@ -80,6 +123,9 @@ async def register(user_data: UserCreate):
                 "role": user_data.role,
             }
         }
+        if assign_warning:
+            response["warning"] = assign_warning
+        return response
     except HTTPException:
         raise
     except Exception as e:
@@ -344,5 +390,14 @@ async def get_current_user_info(current_user: dict = Depends(get_current_user)):
         "email": user["email"],
         "full_name": user["full_name"],
         "role": user["role"],
+        "is_active": user.get("is_active", True),
         "created_at": user.get("created_at"),
+        "height_cm": user.get("height_cm"),
+        "weight_kg": user.get("weight_kg"),
+        "bmi": user.get("bmi"),
+        "dob": user.get("dob"),
+        "gender": user.get("gender"),
+        "mobile": user.get("mobile"),
+        "address": user.get("address"),
+        "pincode": user.get("pincode"),
     }

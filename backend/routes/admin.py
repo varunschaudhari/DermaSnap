@@ -12,6 +12,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 from auth.dependencies import get_current_admin
 from auth.auth import get_password_hash
 from server import db
+from routes.auth import auto_assign_doctor
 
 router = APIRouter(prefix="/admin", tags=["admin"])
 
@@ -236,14 +237,25 @@ async def create_user(
     if payload.mobile is not None:
         user_doc["mobile"] = payload.mobile
     result = await db.users.insert_one(user_doc)
-    return {
-        "id": str(result.inserted_id),
+    new_id = str(result.inserted_id)
+
+    # Auto-assign a doctor for new patients
+    assign_warning = None
+    if payload.role == "patient":
+        assign_result = await auto_assign_doctor(new_id)
+        assign_warning = assign_result.get("warning")
+
+    response = {
+        "id": new_id,
         "email": payload.email,
         "full_name": payload.full_name,
         "role": payload.role,
         "is_active": True,
         "created_at": now,
     }
+    if assign_warning:
+        response["warning"] = assign_warning
+    return response
 
 @router.get("/stats", response_model=Dict[str, Any])
 async def get_system_stats(
@@ -280,6 +292,74 @@ async def get_system_stats(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to get statistics: {str(e)}"
         )
+
+@router.get("/relationships", response_model=List[Dict[str, Any]])
+async def list_all_relationships(
+    current_user: dict = Depends(get_current_admin)
+):
+    """List all doctor-patient relationships with user names"""
+    try:
+        relationships = await db.relationships.find({}).sort("created_at", -1).to_list(500)
+
+        # Collect all unique user IDs
+        user_ids = set()
+        for rel in relationships:
+            if rel.get("doctor_id"):
+                user_ids.add(rel["doctor_id"])
+            if rel.get("patient_id"):
+                user_ids.add(rel["patient_id"])
+
+        valid_ids = [ObjectId(uid) for uid in user_ids if ObjectId.is_valid(uid)]
+        users_cursor = await db.users.find({"_id": {"$in": valid_ids}}).to_list(1000)
+        user_map = {str(u["_id"]): u for u in users_cursor}
+
+        result = []
+        for rel in relationships:
+            doctor = user_map.get(rel.get("doctor_id", ""), {})
+            patient = user_map.get(rel.get("patient_id", ""), {})
+            result.append({
+                "id": str(rel["_id"]),
+                "doctor_id": rel.get("doctor_id"),
+                "doctor_name": doctor.get("full_name", "Unknown"),
+                "doctor_email": doctor.get("email", ""),
+                "patient_id": rel.get("patient_id"),
+                "patient_name": patient.get("full_name", "Unknown"),
+                "patient_email": patient.get("email", ""),
+                "status": rel.get("status", "active"),
+                "created_at": rel.get("created_at").isoformat() if rel.get("created_at") else None,
+            })
+
+        return result
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to retrieve relationships: {str(e)}"
+        )
+
+
+@router.delete("/relationships/{relationship_id}")
+async def delete_relationship(
+    relationship_id: str,
+    current_user: dict = Depends(get_current_admin)
+):
+    """Remove a doctor-patient relationship"""
+    try:
+        if not ObjectId.is_valid(relationship_id):
+            raise HTTPException(status_code=400, detail="Invalid relationship ID")
+
+        result = await db.relationships.delete_one({"_id": ObjectId(relationship_id)})
+        if result.deleted_count == 0:
+            raise HTTPException(status_code=404, detail="Relationship not found")
+
+        return {"message": "Relationship removed"}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to delete relationship: {str(e)}"
+        )
+
 
 @router.get("/performance", response_model=Dict[str, Any])
 async def get_ai_performance(

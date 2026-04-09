@@ -1,4 +1,4 @@
-from fastapi import FastAPI, APIRouter, HTTPException
+from fastapi import FastAPI, APIRouter, HTTPException, Header
 from dotenv import load_dotenv
 from starlette.middleware.cors import CORSMiddleware
 from motor.motor_asyncio import AsyncIOMotorClient
@@ -9,6 +9,7 @@ from pydantic import BaseModel, Field
 from typing import List, Optional, Dict, Any
 from datetime import datetime
 from bson import ObjectId
+from auth.auth import decode_access_token
 
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
@@ -108,17 +109,23 @@ async def health():
     return {"status": "healthy", "service": "DermaSnap API"}
 
 @api_router.post("/scans", response_model=Dict[str, str])
-async def create_scan(scan: ScanData):
+async def create_scan(scan: ScanData, authorization: Optional[str] = Header(None)):
     """
-    Save a new skin scan analysis
+    Save a new skin scan analysis. Attaches userId from Bearer token if present.
     """
     try:
         scan_dict = scan.dict()
-        # Remove base64 image before storing (to save space - optional)
-        scan_dict_to_store = scan_dict.copy()
-        # Keep imageBase64 if you want full data backup
-        
-        result = await db.scans.insert_one(scan_dict_to_store)
+        # Extract userId from auth token if provided
+        if authorization and authorization.startswith("Bearer "):
+            try:
+                payload = decode_access_token(authorization[7:])
+                user_id = payload.get("sub")
+                if user_id:
+                    scan_dict["userId"] = user_id
+            except Exception:
+                pass  # Token invalid — save scan without userId
+
+        result = await db.scans.insert_one(scan_dict)
         logger.info(f"Scan saved with ID: {result.inserted_id}")
         return {"id": str(result.inserted_id), "message": "Scan saved successfully"}
     except Exception as e:
@@ -126,13 +133,15 @@ async def create_scan(scan: ScanData):
         raise HTTPException(status_code=500, detail=f"Failed to save scan: {str(e)}")
 
 @api_router.get("/scans", response_model=List[Dict[str, Any]])
-async def get_scans(limit: int = 50, skip: int = 0):
+async def get_scans(limit: int = 50, skip: int = 0, patient_id: Optional[str] = None):
     """
-    Retrieve all scans with pagination
+    Retrieve scans with optional patient_id filter (matches userId field on scan docs).
     """
     try:
-        scans = await db.scans.find().sort("timestamp", -1).skip(skip).limit(limit).to_list(limit)
-        # Convert ObjectId to string for JSON serialization
+        query = {}
+        if patient_id:
+            query["userId"] = patient_id
+        scans = await db.scans.find(query).sort("timestamp", -1).skip(skip).limit(limit).to_list(limit)
         for scan in scans:
             scan['_id'] = str(scan['_id'])
         return scans

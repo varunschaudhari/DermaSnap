@@ -223,7 +223,7 @@ export default function AdminRoles() {
               )}
               <div className="flex items-center gap-2 pt-1">
                 <button
-                  disabled={!canCreate || createRole.isLoading}
+                  disabled={!canCreate || createRole.isPending}
                   onClick={() =>
                     createRole.mutate({
                       name: newName.trim(),
@@ -233,7 +233,7 @@ export default function AdminRoles() {
                   }
                   className="rounded-md bg-slate-900 px-3 py-2 text-xs font-semibold text-white disabled:opacity-50"
                 >
-                  {createRole.isLoading ? 'Saving...' : 'Save'}
+                  {createRole.isPending ? 'Saving...' : 'Save'}
                 </button>
                 <button className="text-xs text-slate-600 hover:underline" onClick={() => setCreateOpen(false)}>
                   Cancel
@@ -426,7 +426,7 @@ export default function AdminRoles() {
                   )}
                   <div className="flex items-center gap-2 pt-1">
                     <button
-                      disabled={!(newName.trim() && newKey.trim() && keyPattern.test(newKey.trim())) || createRole.isLoading}
+                      disabled={!(newName.trim() && newKey.trim() && keyPattern.test(newKey.trim())) || createRole.isPending}
                       onClick={() =>
                         createRole.mutate({
                           name: newName.trim(),
@@ -436,7 +436,7 @@ export default function AdminRoles() {
                       }
                       className="rounded-md bg-slate-900 px-3 py-2 text-xs font-semibold text-white disabled:opacity-50"
                     >
-                      {createRole.isLoading ? 'Saving...' : 'Save'}
+                      {createRole.isPending ? 'Saving...' : 'Save'}
                     </button>
                     <button className="text-xs text-slate-600 hover:underline" onClick={() => setCreateOpen(false)}>
                       Cancel
@@ -474,7 +474,7 @@ export default function AdminRoles() {
               </button>
               <button
                 className="rounded-md bg-slate-900 px-3 py-2 text-xs font-semibold text-white disabled:opacity-50"
-                disabled={!renameValue.trim() || updateRole.isLoading}
+                disabled={!renameValue.trim() || updateRole.isPending}
                 onClick={() => {
                   const nv = renameValue.trim();
                   if (nv && nv !== renameTarget.name) {

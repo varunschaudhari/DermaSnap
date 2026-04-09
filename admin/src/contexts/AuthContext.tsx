@@ -70,7 +70,8 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const login = async (email: string, password: string) => {
     const authData = await authService.login(email, password);
     setUser(authData.user);
-    window.location.href = authData.user.role === 'admin' ? '/admin' : '/doctor';
+    const roleMap: Record<string, string> = { admin: '/admin', doctor: '/doctor', patient: '/patient' };
+    window.location.href = roleMap[authData.user.role] ?? '/login';
   };
 
   const logout = async () => {

@@ -6,25 +6,28 @@ export type AppModule =
   | 'adminDashboard'
   | 'adminUsers'
   | 'adminRoles'
+  | 'adminRelationships'
   | 'doctorDashboard'
   | 'reports'
   | 'patientManagement'
-  | 'scanDetails';
+  | 'scanDetails'
+  | 'patientDashboard';
 
 export type SidebarItem = {
   label: string;
   path: string;
   module: AppModule;
-  icon: 'dashboard' | 'users' | 'roles' | 'doctor' | 'reports';
+  icon: 'dashboard' | 'users' | 'roles' | 'doctor' | 'reports' | 'relationships';
 };
 
 const rolePermissions: Record<AppRole, AppModule[]> = {
-  patient: [],
+  patient: ['patientDashboard'],
   doctor: ['doctorDashboard', 'reports', 'patientManagement', 'scanDetails'],
   admin: [
     'adminDashboard',
     'adminUsers',
     'adminRoles',
+    'adminRelationships',
     'doctorDashboard',
     'reports',
     'patientManagement',
@@ -33,7 +36,9 @@ const rolePermissions: Record<AppRole, AppModule[]> = {
 };
 
 const roleSidebarItems: Record<AppRole, SidebarItem[]> = {
-  patient: [],
+  patient: [
+    { label: 'My Dashboard', path: '/patient', module: 'patientDashboard', icon: 'dashboard' },
+  ],
   doctor: [
     { label: 'Doctor Dashboard', path: '/doctor', module: 'doctorDashboard', icon: 'doctor' },
     { label: 'Reports', path: '/doctor/reports', module: 'reports', icon: 'reports' },
@@ -42,6 +47,7 @@ const roleSidebarItems: Record<AppRole, SidebarItem[]> = {
     { label: 'Admin Dashboard', path: '/admin', module: 'adminDashboard', icon: 'dashboard' },
     { label: 'Users', path: '/admin/users', module: 'adminUsers', icon: 'users' },
     { label: 'Roles', path: '/admin/roles', module: 'adminRoles', icon: 'roles' },
+    { label: 'Relationships', path: '/admin/relationships', module: 'adminRelationships', icon: 'relationships' },
     { label: 'Doctor Dashboard', path: '/doctor', module: 'doctorDashboard', icon: 'doctor' },
     { label: 'Reports', path: '/doctor/reports', module: 'reports', icon: 'reports' },
   ],
@@ -50,6 +56,7 @@ const roleSidebarItems: Record<AppRole, SidebarItem[]> = {
 export function getDefaultRouteForRole(role: AppRole | undefined): string {
   if (role === 'admin') return '/admin';
   if (role === 'doctor') return '/doctor';
+  if (role === 'patient') return '/patient';
   return '/login';
 }
 

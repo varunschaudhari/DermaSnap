@@ -1,0 +1,9 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npx tsc:*)",
+      "Bash(ls \"c:/Users/varun.chaudhari.CUBEHIGHWAYS/projects/DermaSnap/admin/src/\"*.d.ts)",
+      "Bash(ls \"c:/Users/varun.chaudhari.CUBEHIGHWAYS/projects/DermaSnap/admin/\"*.d.ts)"
+    ]
+  }
+}

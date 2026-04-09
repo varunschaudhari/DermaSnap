@@ -40,9 +40,22 @@ const icons: Record<string, JSX.Element> = {
       <path d="M18 20V10M12 20V4M6 20v-6" />
     </svg>
   ),
+  relationships: (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="h-[18px] w-[18px]">
+      <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" />
+      <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" />
+    </svg>
+  ),
 };
 
 // ─── Nav groups ──────────────────────────────────────────────────────────────
+const patientGroups = [
+  {
+    label: 'My Health',
+    items: ['My Dashboard'],
+  },
+];
+
 const adminGroups = [
   {
     label: 'Platform',
@@ -50,7 +63,7 @@ const adminGroups = [
   },
   {
     label: 'Management',
-    items: ['Users', 'Roles'],
+    items: ['Users', 'Roles', 'Relationships'],
   },
   {
     label: 'Clinical',
@@ -72,8 +85,10 @@ function usePageTitle() {
     '/admin': 'Dashboard',
     '/admin/users': 'Users',
     '/admin/roles': 'Roles',
+    '/admin/relationships': 'Relationships',
     '/doctor': 'Dashboard',
     '/doctor/reports': 'Reports',
+    '/patient': 'My Dashboard',
   };
   if (pathname.startsWith('/admin/users/')) return 'User Detail';
   if (pathname.startsWith('/doctor/patient/')) return 'Patient Detail';
@@ -86,10 +101,11 @@ export default function AppLayout({ children }: AppLayoutProps) {
   const { user, logout } = useAuth();
   const navItems = getSidebarItems(user?.role);
   const isAdmin = user?.role === 'admin';
+  const isPatient = user?.role === 'patient';
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const pageTitle = usePageTitle();
 
-  const groups = isAdmin ? adminGroups : doctorGroups;
+  const groups = isAdmin ? adminGroups : isPatient ? patientGroups : doctorGroups;
 
   // Map group item labels → navItem
   const itemByLabel = Object.fromEntries(navItems.map((n) => [n.label, n]));
@@ -99,10 +115,10 @@ export default function AppLayout({ children }: AppLayoutProps) {
     : '?';
 
   // Theme tokens
-  const accentHex = isAdmin ? '#6366f1' : '#0d9488';
-  const sidebarBg = isAdmin ? '#0f1117' : '#0d1f1e';
-  const activeBg = isAdmin ? 'rgba(99,102,241,0.15)' : 'rgba(13,148,136,0.15)';
-  const activeText = isAdmin ? '#a5b4fc' : '#5eead4';
+  const accentHex = isAdmin ? '#6366f1' : isPatient ? '#10b981' : '#0d9488';
+  const sidebarBg = isAdmin ? '#0f1117' : isPatient ? '#052e16' : '#0d1f1e';
+  const activeBg = isAdmin ? 'rgba(99,102,241,0.15)' : isPatient ? 'rgba(16,185,129,0.15)' : 'rgba(13,148,136,0.15)';
+  const activeText = isAdmin ? '#a5b4fc' : isPatient ? '#6ee7b7' : '#5eead4';
   const hoverBg = 'rgba(255,255,255,0.05)';
   const groupLabelColor = isAdmin ? '#4b5563' : '#374151';
 
