@@ -22,12 +22,12 @@
       }
     },
     "production": {
+      "env": {
+        "EXPO_PUBLIC_BACKEND_URL": "http://187.127.149.141"
+      },
       "android": {
         "buildType": "apk",
         "gradleCommand": ":app:assembleRelease"
-      },
-      "ios": {
-        "simulator": false
       }
     }
   },
