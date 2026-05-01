@@ -8,11 +8,6 @@
     "scheme": "dermasnap",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": false,
-    "splash": {
-      "image": "./assets/images/app-image.png",
-      "resizeMode": "contain",
-      "backgroundColor": "#ffffff"
-    },
     "ios": {
       "supportsTablet": true,
       "infoPlist": {
@@ -71,15 +66,6 @@
           "sounds": []
         }
       ],
-      [
-        "expo-splash-screen",
-        {
-          "image": "./assets/images/app-image.png",
-          "imageWidth": 200,
-          "resizeMode": "contain",
-          "backgroundColor": "#000"
-        }
-      ]
     ],
     "experiments": {
       "typedRoutes": true

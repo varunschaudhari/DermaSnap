@@ -5,7 +5,6 @@ import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { format } from 'date-fns';
-import { LineChart, BarChart } from 'react-native-gifted-charts';
 import { BACKEND_URL } from '../config/api';
 
 const { width } = Dimensions.get('window');

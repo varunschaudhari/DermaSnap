@@ -1,9 +1,11 @@
 /**
  * Authentication context for global auth state
+ * Optimized for fast startup - loads user data in background
  */
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { authService, User } from '../services/auth';
 import { BACKEND_URL } from '../config/api';
+import { loadDataInBackground, preloadWithTimeout } from '../utils/startupOptimization';
 
 interface AuthContextType {
   user: User | null;
@@ -49,44 +51,62 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    loadUser();
+    console.log('[Auth] Initializing auth context');
+    // Hide splash and unblock UI ASAP
+    setIsLoading(false);
+
+    // Load user in background (non-blocking)
+    loadDataInBackground(() => loadUserFromCache());
   }, []);
 
-  const loadUser = async () => {
+  // Fast: Load user from local storage immediately
+  const loadUserFromCache = async () => {
     try {
+      console.log('[Auth] Loading user from cache');
       const currentUser = await authService.getCurrentUser();
       const isAuth = await authService.isAuthenticated();
-      
+
+      console.log('[Auth] Cache loaded - isAuth:', isAuth, 'user:', currentUser?.email);
       if (isAuth && currentUser) {
-        // Verify token is still valid by fetching user info
-        try {
-          const token = await authService.getAccessToken();
-          const response = await fetch(`${BACKEND_URL}/api/auth/me`, {
-            headers: {
-              'Authorization': `Bearer ${token}`,
-            },
-          });
-          
-          if (response.ok) {
-            const userData = await response.json();
-            setUser(userData as unknown as User);
-          } else {
-            // Token invalid, clear user
-            await authService.logout();
-            setUser(null);
-          }
-        } catch (error) {
-          console.error('Error verifying user:', error);
-          setUser(null);
-        }
+        setUser(currentUser);
       } else {
         setUser(null);
       }
+
+      // Verify with backend in background
+      loadDataInBackground(() => verifyUserWithBackend());
     } catch (error) {
-      console.error('Error loading user:', error);
+      console.error('[Auth] Error loading cached user:', error);
       setUser(null);
-    } finally {
-      setIsLoading(false);
+    }
+  };
+
+  // Background: Verify token with backend (non-blocking, with timeout)
+  const verifyUserWithBackend = async () => {
+    try {
+      const isAuth = await authService.isAuthenticated();
+      if (!isAuth) return;
+
+      const token = await authService.getAccessToken();
+      if (!token) return;
+
+      // Use timeout to prevent hanging on slow networks
+      const userData = await preloadWithTimeout(
+        () => fetch(`${BACKEND_URL}/api/auth/me`, {
+          headers: { 'Authorization': `Bearer ${token}` },
+        }).then(r => r.ok ? r.json() : null),
+        3000 // 3 second timeout
+      );
+
+      if (userData) {
+        setUser(userData as unknown as User);
+      } else if (!userData) {
+        // Token might be invalid, but don't logout yet (user is already viewing content)
+        console.warn('Token verification failed, but staying logged in');
+      }
+    } catch (error) {
+      console.warn('Background token verification failed:', error);
+      // Don't logout on background verification failure
     }
   };
 

@@ -5,6 +5,7 @@ import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useAuth } from '../contexts/AuthContext';
+import { loadDataInBackground } from '../utils/startupOptimization';
 
 const { width } = Dimensions.get('window');
 
@@ -26,28 +27,34 @@ export default function HomeScreen() {
   const [showSourceModal, setShowSourceModal] = useState(false);
 
   useEffect(() => {
+    console.log('[Home] Auth state changed - authLoading:', authLoading, 'user:', user?.email);
     if (!authLoading) {
-      if (!user) {
-        router.replace('/auth/login');
-        return;
-      }
-      if (user.role === 'doctor') {
-        router.replace('/doctor');
-        return;
-      }
-      if (user.role === 'admin') {
-        router.replace('/admin');
-        return;
-      }
-      // Patient flow
-      initializeApp();
+      handleAuthState();
     }
   }, [authLoading, user]);
 
-  const initializeApp = async () => {
-    await ensureActiveProfile();
-    await checkDisclaimerStatus();
-    setLoading(false);
+  const handleAuthState = async () => {
+    if (!user) {
+      router.replace('/auth/login');
+      return;
+    }
+
+    if (user.role === 'doctor') {
+      router.replace('/doctor');
+      return;
+    }
+
+    if (user.role === 'admin') {
+      router.replace('/admin');
+      return;
+    }
+
+    // Patient flow: Load data in background
+    loadDataInBackground(async () => {
+      await ensureActiveProfile();
+      await checkDisclaimerStatus();
+      setLoading(false);
+    });
   };
 
   const ensureActiveProfile = async () => {

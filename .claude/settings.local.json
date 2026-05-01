@@ -3,7 +3,10 @@
     "allow": [
       "Bash(npx tsc:*)",
       "Bash(ls \"c:/Users/varun.chaudhari.CUBEHIGHWAYS/projects/DermaSnap/admin/src/\"*.d.ts)",
-      "Bash(ls \"c:/Users/varun.chaudhari.CUBEHIGHWAYS/projects/DermaSnap/admin/\"*.d.ts)"
+      "Bash(ls \"c:/Users/varun.chaudhari.CUBEHIGHWAYS/projects/DermaSnap/admin/\"*.d.ts)",
+      "Bash(grep -n \"class ScanData\" \"c:\\\\\\\\Users\\\\\\\\varun.chaudhari.CUBEHIGHWAYS\\\\\\\\projects\\\\\\\\DermaSnap\\\\\\\\backend\\\\\\\\server.py\")",
+      "Bash(grep -rn \"authService\" \"c:\\\\\\\\Users\\\\\\\\varun.chaudhari.CUBEHIGHWAYS\\\\\\\\projects\\\\\\\\DermaSnap\\\\\\\\backend\" --include=\"*.py\")",
+      "Bash(grep -rn \"authService\\\\|Property.*doesn't exist\" \"c:\\\\\\\\Users\\\\\\\\varun.chaudhari.CUBEHIGHWAYS\\\\\\\\projects\\\\\\\\DermaSnap\\\\\\\\frontend\" --include=\"*.ts\" --include=\"*.tsx\")"
     ]
   }
 }

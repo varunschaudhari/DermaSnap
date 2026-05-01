@@ -4,13 +4,7 @@
  */
 
 // Backend URL
-// - Prefer EXPO_PUBLIC_BACKEND_URL when provided (works for local/LAN backends and per-build overrides)
-// - Fall back to the hosted backend
-export const BACKEND_URL =
-  process.env.EXPO_PUBLIC_BACKEND_URL?.trim() || 'https://dermasnap.onrender.com';
-
-// Production backend URL (kept for compatibility)
-export const PRODUCTION_BACKEND_URL = 'https://dermasnap.onrender.com';
+export const BACKEND_URL = 'http://187.127.149.141';
 
 // API Endpoints
 export const API_ENDPOINTS = {

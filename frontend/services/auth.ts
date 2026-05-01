@@ -1,8 +1,9 @@
 /**
- * Authentication service
+ * Authentication service with retry logic for improved reliability
  */
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { BACKEND_URL } from '../config/api';
+import { retryFetch } from '../utils/apiRetry';
 
 export interface User {
   id: string;
@@ -42,7 +43,7 @@ export const authService = {
       pincode?: string;
     }
   ): Promise<AuthResponse> {
-    const response = await fetch(`${BACKEND_URL}/api/auth/register`, {
+    const response = await retryFetch(`${BACKEND_URL}/api/auth/register`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -77,7 +78,7 @@ export const authService = {
    * Login with email and password
    */
   async login(email: string, password: string): Promise<AuthResponse> {
-    const response = await fetch(`${BACKEND_URL}/api/auth/login`, {
+    const response = await retryFetch(`${BACKEND_URL}/api/auth/login`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -146,7 +147,7 @@ export const authService = {
         return null;
       }
 
-      const response = await fetch(`${BACKEND_URL}/api/auth/refresh`, {
+      const response = await retryFetch(`${BACKEND_URL}/api/auth/refresh`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -193,14 +194,14 @@ export const authService = {
    */
   async authenticatedFetch(url: string, options: RequestInit = {}): Promise<Response> {
     const token = await this.getAccessToken();
-    
+
     const headers = {
       ...options.headers,
       'Content-Type': 'application/json',
       'Authorization': `Bearer ${token}`,
     };
 
-    let response = await fetch(url, {
+    let response = await retryFetch(url, {
       ...options,
       headers,
     });
@@ -210,7 +211,7 @@ export const authService = {
       const newToken = await this.refreshToken();
       if (newToken) {
         headers['Authorization'] = `Bearer ${newToken}`;
-        response = await fetch(url, {
+        response = await retryFetch(url, {
           ...options,
           headers,
         });
