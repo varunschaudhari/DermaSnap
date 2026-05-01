@@ -148,6 +148,7 @@ class ScanData(BaseModel):
     acne: Optional[AnalysisResult] = None
     pigmentation: Optional[AnalysisResult] = None
     wrinkles: Optional[AnalysisResult] = None
+    profileId: Optional[str] = None
 
 
 def _resolve_storage_type(analysis_type: str) -> str:
@@ -234,6 +235,8 @@ async def create_scan(scan: ScanData, current_user: dict = Depends(get_current_u
             scan_dict["imageUri"] = image_meta["imageUrl"]
             scan_dict["imagePath"] = image_meta["imagePath"]
             scan_dict["user_id"] = current_user["id"]  # Add user_id
+            if not scan_dict.get("profileId"):
+                scan_dict["profileId"] = current_user["id"]  # Default to user_id if no profile specified
             # Keep DB lean by removing raw base64 payload
             scan_dict.pop("imageBase64", None)
             
