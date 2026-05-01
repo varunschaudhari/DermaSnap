@@ -190,10 +190,10 @@ def _save_image_to_disk(image_base64: str, storage_type: str) -> Dict[str, str]:
     target_dir.mkdir(parents=True, exist_ok=True)
     image_path = target_dir / filename
     image_path.write_bytes(_decode_base64_image(image_base64))
-    relative_path = image_path.relative_to(ROOT_DIR).as_posix()
+    relative_path = image_path.relative_to(UPLOAD_DIR).as_posix()
     return {
         "imagePath": str(image_path),
-        "imageUrl": f"/{relative_path}",
+        "imageUrl": f"/uploads/{relative_path}",
     }
 
 class ScanResponse(BaseModel):
