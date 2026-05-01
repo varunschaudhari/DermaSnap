@@ -223,12 +223,14 @@ async def create_scan(scan: ScanData, current_user: dict = Depends(get_current_u
     Save a new skin scan analysis.
     Image is stored on local disk by scan type; Mongo stores metadata and image path.
     """
+    logger.info(f"📥 Received scan creation request from user: {current_user.get('id')}")
     max_retries = 3
     retry_delay = 1  # seconds
-    
+
     for attempt in range(max_retries):
         try:
             scan_dict = scan.dict()
+            logger.info(f"✅ Scan validated. analysisType: {scan_dict.get('analysisType')}, skinTone: {scan_dict.get('skinTone')}")
             storage_type = _resolve_storage_type(scan_dict.get("analysisType", ""))
             image_meta = _save_image_to_disk(scan_dict["imageBase64"], storage_type)
             scan_dict["analysisType"] = storage_type
